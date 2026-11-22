@@ -410,6 +410,52 @@ fn shootout_kicks_are_not_shots_of_the_match() {
     assert!(shootouts > 0, "no shootout in 200 knockout ties");
 }
 
+/// Given a live match under way,
+/// When its snapshot is taken each minute,
+/// Then it carries the shot map and both sides' xG, and a pitch frame with everyone on the
+/// pitch, inside it, and no two players on one spot.
+#[test]
+fn the_snapshot_carries_the_shot_map_and_a_pitch_frame() {
+    let mut state = live_state(&equal_side("h"), vec![]);
+    let mut rng = StdRng::seed_from_u64(7);
+    loop {
+        let finished = state.step_minute(&mut rng).is_finished;
+        let snapshot = state.snapshot();
+        let home_xg: f32 = snapshot
+            .shots
+            .iter()
+            .filter(|shot| shot.side == Side::Home)
+            .map(|shot| shot.xg)
+            .sum();
+        assert!((home_xg - snapshot.home_xg).abs() < 1e-4);
+        let frame = snapshot.pitch_frame.expect("a frame every minute");
+        let on_the_pitch = 22 - snapshot.sent_off.len();
+        assert_eq!(frame.players.len(), on_the_pitch);
+        for (index, a) in frame.players.iter().enumerate() {
+            assert!((0.0..=100.0).contains(&a.x) && (0.0..=100.0).contains(&a.y));
+            assert!(!snapshot.sent_off.contains(&a.player_id));
+            for b in &frame.players[index + 1..] {
+                assert!((a.x - b.x).abs() >= 1.0 || (a.y - b.y).abs() >= 1.0);
+            }
+        }
+        if finished {
+            assert!(!snapshot.shots.is_empty());
+            return;
+        }
+    }
+}
+
+/// Given a finished match's report,
+/// When its frames are rebuilt from its events,
+/// Then there is one for each minute it was played.
+#[test]
+fn a_report_can_be_replayed_as_frames() {
+    let home = equal_side("h");
+    let report = instant(&home, &TeamExtras::default(), 3);
+    let frames = engine::frames_from_events(&home, &equal_side("a"), &report.events);
+    assert_eq!(frames.len(), usize::from(report.total_minutes) + 1);
+}
+
 /// Given a free-kick taker who shoots, over many matches,
 /// When the goals are read off the reports,
 /// Then some of his are scored straight from the free kick.

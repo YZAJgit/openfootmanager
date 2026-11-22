@@ -15,6 +15,7 @@ pub(crate) use observation::AiObservation;
 
 use crate::event::MatchEvent;
 use crate::extras::{PendingSetPiece, TeamExtras};
+use crate::pitch_2d::PitchFrame2D;
 use crate::report::MatchReport;
 use crate::types::{
     MatchConfig, PlayStyle, PlayerData, PlayerRole, Position, Side, TacticalDial, TeamData,
@@ -215,6 +216,9 @@ pub struct MatchSnapshot {
     pub home_xg: f32,
     #[serde(default)]
     pub away_xg: f32,
+    /// Where everyone stands this minute, for a 2D pitch view.
+    #[serde(default)]
+    pub pitch_frame: Option<PitchFrame2D>,
 }
 
 // ---------------------------------------------------------------------------

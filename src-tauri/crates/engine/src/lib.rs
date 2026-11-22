@@ -3,6 +3,7 @@ pub mod engine;
 pub mod event;
 pub(crate) mod extras;
 pub mod live_match;
+pub mod pitch_2d;
 pub mod rating;
 pub mod report;
 pub(crate) mod shared;
@@ -21,6 +22,7 @@ pub use live_match::{
     LiveMatchState, MatchCommand, MatchPhase, MatchSnapshot, MinuteResult, PenaltyShootoutSnapshot,
     SetPieceTakers, ShootoutOrderSnapshot, SubstitutionRecord,
 };
+pub use pitch_2d::{BallState2D, PitchCoord, PitchFrame2D, PlayerDot2D, frames_from_events};
 pub use report::{GoalDetail, GoalSource, MatchReport, PlayerMatchStats, TeamStats};
 pub use shared::role_has_match_effect;
 pub use types::{

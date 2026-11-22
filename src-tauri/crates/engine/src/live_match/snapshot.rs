@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::pitch_2d::{FrameInput, PitchFrame2D, frame};
 use crate::types::Side;
 use crate::xg::total_xg;
 
@@ -122,6 +123,21 @@ impl LiveMatchState {
             shots: self.shots.clone(),
             home_xg: total_xg(self.shots.iter(), Side::Home),
             away_xg: total_xg(self.shots.iter(), Side::Away),
+            pitch_frame: Some(self.pitch_frame()),
         }
+    }
+
+    /// Where everyone stands right now, for the 2D pitch view.
+    fn pitch_frame(&self) -> PitchFrame2D {
+        frame(&FrameInput {
+            minute: self.current_minute,
+            phase: format!("{:?}", self.phase),
+            home: &self.home,
+            away: &self.away,
+            off_the_pitch: &self.sent_off,
+            ball_zone: self.ball_zone,
+            possession: self.possession,
+            last_event: self.events.last(),
+        })
     }
 }

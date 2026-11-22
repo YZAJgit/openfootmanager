@@ -605,3 +605,169 @@ fn an_open_player_lowers_the_asking_price_by_a_tenth() {
 
     assert_eq!(asking, 1_100_000);
 }
+
+fn release_clause_game(clause: Option<i64>) -> Game {
+    let mut game = acceptance_game("team2", false);
+    game.players[0].release_clause = clause;
+    game
+}
+
+/// Given a 600,000 player whose club would not entertain 400,000
+/// When the user bids 400,000 with no clause, and again for a player whose clause is 400,000
+/// Then the first bid is refused, and the second is agreed at once and the player moves.
+#[test]
+fn a_bid_that_meets_the_release_clause_is_agreed_without_haggling() {
+    let mut without = release_clause_game(None);
+    let refused = super::make_transfer_bid(&mut without, "player-award", 400_000).unwrap();
+    assert_eq!(
+        refused.decision,
+        super::TransferNegotiationDecision::Rejected
+    );
+
+    let mut with = release_clause_game(Some(400_000));
+    let agreed = super::make_transfer_bid(&mut with, "player-award", 400_000).unwrap();
+
+    assert_eq!(
+        agreed.decision,
+        super::TransferNegotiationDecision::Accepted
+    );
+    assert_eq!(with.players[0].team_id.as_deref(), Some("team1"));
+}
+
+/// Given a clause of zero, which is no clause
+/// When the user bids a token fee
+/// Then it is not agreed.
+#[test]
+fn a_zero_release_clause_binds_nobody() {
+    let mut game = release_clause_game(Some(0));
+
+    let outcome = super::make_transfer_bid(&mut game, "player-award", 1_000).unwrap();
+
+    assert_ne!(
+        outcome.decision,
+        super::TransferNegotiationDecision::Accepted
+    );
+    assert_eq!(game.players[0].team_id.as_deref(), Some("team2"));
+}
+
+/// Given a player whose club would ask well above his 400,000 clause
+/// When his asking price is worked out
+/// Then it is the clause: no club asks more than the price it agreed to sell at.
+#[test]
+fn the_asking_price_never_exceeds_the_release_clause() {
+    let game = release_clause_game(Some(400_000));
+    let date = game.clock.current_date.date_naive();
+    let (owner, buyer) = (&game.teams[1], &game.teams[0]);
+    let unclaused = {
+        let mut player = game.players[0].clone();
+        player.release_clause = None;
+        super::minimum_acceptable_fee(date, &player, owner, buyer)
+    };
+
+    let asking = super::minimum_acceptable_fee(date, &game.players[0], owner, buyer);
+
+    assert!(unclaused > 400_000, "{unclaused}");
+    assert_eq!(asking, 400_000);
+}
+
+fn window(
+    status: TransferWindowStatus,
+    days_remaining: Option<i64>,
+) -> domain::season::TransferWindowContext {
+    domain::season::TransferWindowContext {
+        status,
+        days_remaining,
+        ..Default::default()
+    }
+}
+
+/// Given an open window with weeks to run, one three days from closing, and deadline day
+/// When the market works out how hard clubs push
+/// Then only the last two hurry: a second new club a day per player, deals on less conviction
+///      and a tenth over the odds.
+#[test]
+fn clubs_hurry_as_the_window_closes() {
+    let calm = super::MarketUrgency::for_window(&window(TransferWindowStatus::Open, Some(20)));
+    let closing = super::MarketUrgency::for_window(&window(TransferWindowStatus::Open, Some(3)));
+    let deadline =
+        super::MarketUrgency::for_window(&window(TransferWindowStatus::DeadlineDay, None));
+
+    assert_eq!(calm.new_offers_per_player_per_day, 1);
+    assert_eq!(calm.ai_deal_score_threshold, 60);
+    assert_eq!(calm.offered_fee(1_000_000, 5_000_000), 1_000_000);
+    for urgent in [closing, deadline] {
+        assert_eq!(urgent.new_offers_per_player_per_day, 2);
+        assert_eq!(urgent.ai_deal_score_threshold, 50);
+        assert_eq!(urgent.offered_fee(1_000_000, 5_000_000), 1_100_000);
+    }
+    assert_eq!(
+        super::MarketUrgency::for_window(&window(TransferWindowStatus::Open, None)),
+        calm
+    );
+}
+
+/// Given a hurried club that can only just afford a player
+/// When it works out its offer
+/// Then the premium is cut back to what it can pay, but never below the valuation.
+#[test]
+fn a_hurried_offer_never_exceeds_what_the_club_can_pay() {
+    let deadline =
+        super::MarketUrgency::for_window(&window(TransferWindowStatus::DeadlineDay, None));
+
+    assert_eq!(deadline.offered_fee(1_000_000, 1_050_000), 1_050_000);
+    assert_eq!(deadline.offered_fee(1_000_000, 1_000_000), 1_000_000);
+}
+
+/// Given a club two goalkeepers short of its plan and another with a full set
+/// When each weighs a 20-year-old and a 32-year-old keeper
+/// Then the short club values a keeper more, and both value the young one above the veteran.
+#[test]
+fn squad_needs_and_youth_weigh_in_a_clubs_choice() {
+    let short = |age| super::squad_planning_bonus(0, 0, age);
+    let full = |age| super::squad_planning_bonus(0, 2, age);
+
+    assert_eq!(short(20), 20);
+    assert_eq!(full(20), 8);
+    assert_eq!(full(27), 0);
+    assert_eq!(full(32), -6);
+    assert!(short(32) > full(32));
+    assert!(short(20) > short(32));
+}
+
+/// Given two of the user's players and two rival bids for one of them on deadline day
+/// When the market runs
+/// Then the outbid rival answers the best bid rather than sitting below it.
+#[test]
+fn an_outbid_rival_answers_during_the_market_sweep() {
+    let mut game = make_game();
+    game.season_context.transfer_window.status = TransferWindowStatus::DeadlineDay;
+    let mut rival = game.teams[1].clone();
+    rival.id = "team3".to_string();
+    rival.name = "Gamma FC".to_string();
+    game.teams.push(rival);
+    for (club, fee) in [("team2", 500_000), ("team3", 600_000)] {
+        super::bids::upsert_transfer_offer(
+            &mut game.players[0],
+            club,
+            fee,
+            TransferOfferStatus::Pending,
+            "2026-01-12",
+            None,
+            1,
+            None,
+            None,
+        );
+    }
+
+    evaluate_transfer_market(&mut game);
+
+    let team2 = game.players[0]
+        .transfer_offers
+        .iter()
+        .find(|offer| offer.from_team_id == "team2")
+        .unwrap();
+    assert!(
+        team2.fee > 600_000 || team2.status == TransferOfferStatus::Withdrawn,
+        "{team2:?}"
+    );
+}

@@ -32,17 +32,30 @@ impl FeeBlock {
 /// `Ok` when `team` can pay `fee` out of both its cash and its transfer budget. No clamping: a
 /// club with a negative budget cannot pay even a zero fee, as registration has always decided.
 pub(crate) fn fee_block(team: &Team, fee: u64, committed: i64) -> Result<(), FeeBlock> {
+    fee_block_split(team, fee, fee, committed)
+}
+
+/// [`fee_block`] for a fee whose cash and budget costs differ: one paid in instalments takes only
+/// its upfront part (`cash_fee`) out of the cash on the day, but all of it (`budget_fee`) out of
+/// the transfer budget.
+pub(crate) fn fee_block_split(
+    team: &Team,
+    budget_fee: u64,
+    cash_fee: u64,
+    committed: i64,
+) -> Result<(), FeeBlock> {
     // A fee beyond i64 is beyond any club's cash.
-    let Ok(fee) = i64::try_from(fee) else {
+    let (Ok(budget_fee), Ok(cash_fee)) = (i64::try_from(budget_fee), i64::try_from(cash_fee))
+    else {
         return Err(FeeBlock::InsufficientFunds);
     };
-    if team.finance < fee {
+    if team.finance < cash_fee {
         return Err(FeeBlock::InsufficientFunds);
     }
-    if team.transfer_budget < fee {
+    if team.transfer_budget < budget_fee {
         return Err(FeeBlock::TransferBudgetTooLow);
     }
-    if team.transfer_budget.saturating_sub(committed) < fee {
+    if team.transfer_budget.saturating_sub(committed) < budget_fee {
         return Err(FeeBlock::TransferBudgetCommitted);
     }
     Ok(())
@@ -179,6 +192,27 @@ mod tests {
         assert_eq!(
             FeeBlock::TransferBudgetCommitted.error_key(),
             "be.error.transfers.transferBudgetCommitted"
+        );
+    }
+
+    /// Given a fee paid in instalments whose upfront part the club's cash covers but whose whole
+    /// it does not
+    /// When it is checked split
+    /// Then cash does not block it, while the budget is still measured against the whole fee.
+    #[test]
+    fn an_instalment_deal_needs_cash_only_for_its_upfront_part() {
+        assert_eq!(fee_block_split(&club(300, 1_000), 1_000, 300, 0), Ok(()));
+        assert_eq!(
+            fee_block_split(&club(300, 1_000), 1_000, 301, 0),
+            Err(FeeBlock::InsufficientFunds)
+        );
+        assert_eq!(
+            fee_block_split(&club(300, 999), 1_000, 300, 0),
+            Err(FeeBlock::TransferBudgetTooLow)
+        );
+        assert_eq!(
+            fee_block_split(&club(300, 1_000), 1_000, 300, 1),
+            Err(FeeBlock::TransferBudgetCommitted)
         );
     }
 

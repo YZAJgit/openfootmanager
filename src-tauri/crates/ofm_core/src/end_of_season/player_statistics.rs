@@ -13,6 +13,12 @@ pub(super) fn reset_for_new_season(game: &mut Game) {
         .collect();
     for player in &mut game.players {
         player.reset_season_totals();
+        // Loan baselines are offsets into the season totals just zeroed; left alone they would
+        // exceed the new total and read as a breach of the minutes promise.
+        if let Some(loan) = player.active_loan.as_mut() {
+            loan.loan_start_minutes = 0;
+            loan.loan_start_appearances = 0;
+        }
         player
             .league_stats_by_competition
             .retain(|id, _| retained.contains(id));

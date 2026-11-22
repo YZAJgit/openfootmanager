@@ -44,7 +44,7 @@ pub(super) const MAX_BUYER_REPUTATION_DEFICIT: i32 = 150;
 /// there, so it looks elsewhere.
 pub(super) const POSITION_GROUP_SURPLUS_THRESHOLD: usize = 8;
 pub(super) const ERR_TRANSFER_WINDOW_CLOSED: &str = "be.error.transfers.transferWindowClosed";
-pub(super) const ERR_CANNOT_BID_ON_OWN_PLAYER: &str = "be.error.transfers.cannotBidOnOwnPlayer";
+pub(crate) const ERR_CANNOT_BID_ON_OWN_PLAYER: &str = "be.error.transfers.cannotBidOnOwnPlayer";
 pub(super) const ERR_PLAYER_HAS_NO_TEAM: &str = "be.error.transfers.playerHasNoTeam";
 pub(super) const ERR_INSUFFICIENT_FUNDS: &str = "be.error.transfers.insufficientFunds";
 pub(super) const ERR_TRANSFER_BUDGET_TOO_LOW: &str = "be.error.transfers.transferBudgetTooLow";

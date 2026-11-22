@@ -301,13 +301,44 @@ pub(super) fn ensure_buyer_can_pay_standard_wage(
 }
 
 /// Transfer a player between teams, adjusting finances.
-pub(super) fn execute_transfer(
+pub(crate) fn execute_transfer(
     game: &mut Game,
     player_id: &str,
     to_team_id: &str,
     from_team_id: &str,
     fee: u64,
 ) -> Result<(), String> {
+    execute_transfer_with_schedule(
+        game,
+        player_id,
+        TransferParties {
+            buyer_team_id: to_team_id,
+            seller_team_id: from_team_id,
+        },
+        fee,
+        None,
+    )
+}
+
+/// The two clubs of a permanent transfer.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct TransferParties<'a> {
+    pub(super) buyer_team_id: &'a str,
+    pub(super) seller_team_id: &'a str,
+}
+
+/// [`execute_transfer`] for a fee that may be paid in instalments: with a `schedule` only its
+/// upfront part changes hands on the day, and each later tranche is recorded as owed in
+/// `Game::transfer_installments` for the weekly settlement to pay when it falls due. The whole
+/// fee is what the deal is worth: it is what the budgets, the news and the records carry.
+pub(super) fn execute_transfer_with_schedule(
+    game: &mut Game,
+    player_id: &str,
+    parties: TransferParties<'_>,
+    fee: u64,
+    schedule: Option<&super::structured_bid::InstallmentSchedule>,
+) -> Result<(), String> {
+    let (to_team_id, from_team_id) = (parties.buyer_team_id, parties.seller_team_id);
     // First, before anything moves: an agreement struck while the club had
     // players to spare can fall due after it has lost some.
     crate::squad_floor::ensure_departure_keeps_floor(game, player_id)?;
@@ -352,23 +383,7 @@ pub(super) fn execute_transfer(
 
     let fee_i64 = i64::try_from(fee).map_err(|_| "be.error.finance.amountOverflow".to_string())?;
     let date = game.clock.current_date.date_naive();
-    crate::finances::post_all(
-        game,
-        &[
-            crate::finances::PostRequest::new(
-                to_team_id,
-                -fee_i64,
-                crate::finances::CashKind::TransferFeeOut,
-                date,
-            ),
-            crate::finances::PostRequest::new(
-                from_team_id,
-                fee_i64,
-                crate::finances::CashKind::TransferFeeIn,
-                date,
-            ),
-        ],
-    )?;
+    post_transfer_fee(game, parties, player_id, fee_i64, schedule)?;
 
     // Move player
     if let Some(p) = game.players.iter_mut().find(|p| p.id == player_id) {
@@ -405,36 +420,74 @@ pub(super) fn execute_transfer(
         }
     }
 
-    // Envelope (transfer_budget) still mutates here. Cash is posted above.
+    settle_transfer_envelopes(game, parties, player_id, fee_i64);
+    announce_completed_transfer(
+        game,
+        &player_snapshot,
+        parties,
+        fee,
+        (&from_team_name, &to_team_name),
+        today,
+    );
+    Ok(())
+}
+
+/// Move the fee between the two clubs' transfer budgets, and take the player off the seller's
+/// team sheet. Cash is posted separately, through the journal.
+fn settle_transfer_envelopes(
+    game: &mut Game,
+    parties: TransferParties<'_>,
+    player_id: &str,
+    fee: i64,
+) {
     // Transfer fees do not change season income/expenses (same as develop).
-    if let Some(t) = game.teams.iter_mut().find(|t| t.id == to_team_id) {
-        t.transfer_budget -= fee_i64;
+    if let Some(t) = game
+        .teams
+        .iter_mut()
+        .find(|t| t.id == parties.buyer_team_id)
+    {
+        t.transfer_budget -= fee;
         if let Some(pos) = t.starting_xi_ids.iter().position(|id| id == player_id) {
             t.starting_xi_ids.remove(pos);
         }
     }
 
-    if let Some(t) = game.teams.iter_mut().find(|t| t.id == from_team_id) {
-        t.transfer_budget += fee_i64;
+    if let Some(t) = game
+        .teams
+        .iter_mut()
+        .find(|t| t.id == parties.seller_team_id)
+    {
+        t.transfer_budget += fee;
         // A departing player gives up every role, not just his place in the XI. Trimming the XI by
         // hand here used to leave him as the old club's captain and penalty taker.
         t.remove_player_references(player_id);
     }
+}
 
-    if should_generate_major_transfer_news(&player_snapshot, fee) {
+/// Report a completed transfer: news for a major one, and the competition's transfer log.
+fn announce_completed_transfer(
+    game: &mut Game,
+    player: &Player,
+    parties: TransferParties<'_>,
+    fee: u64,
+    (from_team_name, to_team_name): (&str, &str),
+    today: String,
+) {
+    let (from_team_id, to_team_id) = (parties.seller_team_id, parties.buyer_team_id);
+    if should_generate_major_transfer_news(player, fee) {
         let article_id = format!(
             "transfer_news_{}_{}_{}_{}",
-            player_id, from_team_id, to_team_id, today
+            player.id, from_team_id, to_team_id, today
         );
         if !game.news.iter().any(|article| article.id == article_id) {
             game.news.push(crate::news::major_transfer_article(
                 &article_id,
-                player_id,
-                &player_snapshot.full_name,
+                &player.id,
+                &player.full_name,
                 from_team_id,
-                &from_team_name,
+                from_team_name,
                 to_team_id,
-                &to_team_name,
+                to_team_name,
                 fee,
                 &today,
             ));
@@ -451,11 +504,57 @@ pub(super) fn execute_transfer(
             date: today,
             from_team_id: from_team_id.to_string(),
             to_team_id: to_team_id.to_string(),
-            player_id: player_id.to_string(),
+            player_id: player.id.clone(),
             fee,
         },
     );
+}
 
+/// Post what the buyer pays the seller on the day of the move: the whole fee, or the upfront part
+/// of one paid in instalments, whose tranches are then recorded as owed.
+fn post_transfer_fee(
+    game: &mut Game,
+    parties: TransferParties<'_>,
+    player_id: &str,
+    fee: i64,
+    schedule: Option<&super::structured_bid::InstallmentSchedule>,
+) -> Result<(), String> {
+    let date = game.clock.current_date.date_naive();
+    let paid_now = schedule.map_or(fee, super::structured_bid::InstallmentSchedule::upfront);
+    crate::finances::post_all(
+        game,
+        &[
+            crate::finances::PostRequest::new(
+                parties.buyer_team_id,
+                -paid_now,
+                crate::finances::CashKind::TransferFeeOut,
+                date,
+            ),
+            crate::finances::PostRequest::new(
+                parties.seller_team_id,
+                paid_now,
+                crate::finances::CashKind::TransferFeeIn,
+                date,
+            ),
+        ],
+    )?;
+    let Some(schedule) = schedule else {
+        return Ok(());
+    };
+    let created_date = date.format("%Y-%m-%d").to_string();
+    for tranche in schedule.tranches() {
+        game.transfer_installments
+            .push(domain::finance::TransferInstallment {
+                id: Uuid::new_v4().to_string(),
+                buyer_team_id: parties.buyer_team_id.to_string(),
+                seller_team_id: parties.seller_team_id.to_string(),
+                player_id: player_id.to_string(),
+                amount: tranche.amount,
+                due_date: tranche.due_date.format("%Y-%m-%d").to_string(),
+                settled: false,
+                created_date: created_date.clone(),
+            });
+    }
     Ok(())
 }
 

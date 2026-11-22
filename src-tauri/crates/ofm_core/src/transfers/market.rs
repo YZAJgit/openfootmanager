@@ -87,7 +87,22 @@ pub(crate) fn minimum_acceptable_fee(
     }
 
     let multiplier = multiplier.clamp(0.55, 1.6);
-    ((player.market_value as f64) * multiplier).round() as u64
+    let asking = ((player.market_value as f64) * multiplier).round() as u64;
+    // A club never asks more than the clause it signed: any bid at the clause buys him.
+    release_clause_fee(player).map_or(asking, |clause| asking.min(clause))
+}
+/// The fee that triggers `player`'s release clause, when his contract has one. A clause of zero or
+/// less is no clause.
+pub(crate) fn release_clause_fee(player: &domain::player::Player) -> Option<u64> {
+    player
+        .release_clause
+        .and_then(|clause| u64::try_from(clause).ok())
+        .filter(|clause| *clause > 0)
+}
+/// Whether `fee` meets `player`'s release clause. Such a bid binds his club: it can neither haggle
+/// over the fee nor turn it down.
+pub(crate) fn release_clause_met(player: &domain::player::Player, fee: u64) -> bool {
+    release_clause_fee(player).is_some_and(|clause| fee >= clause)
 }
 pub(crate) fn player_move_openness_score(
     current_date: NaiveDate,
@@ -172,6 +187,88 @@ pub fn evaluate_transfer_market(game: &mut Game) {
     for buyer_id in market_buyer_ids(game, sweep.user_team_id.as_deref()) {
         sweep.visit_buyer(game, &buyer_id);
     }
+    escalate_rival_bids(game);
+}
+/// A window this close to shutting has clubs hurrying to finish their business.
+const DEADLINE_URGENCY_DAYS: i64 = 3;
+/// How many of the best targets a club weighs against its squad's needs.
+const SQUAD_PLANNING_SCAN_LIMIT: usize = 5;
+/// The squad a club plans around, per position group (GK, DEF, MID, FWD).
+const PLANNED_GROUP_DEPTH: [usize; 4] = [2, 6, 6, 4];
+/// What each player a group is short of its plan adds to a target's appeal, up to three.
+const THIN_GROUP_BONUS_PER_MISSING_PLAYER: i32 = 6;
+const MAX_MISSING_PLAYERS_WEIGHED: usize = 3;
+
+/// How clubs behave on a given day of the window: on deadline day, or in the last few days of
+/// it, they open talks faster, close deals on less conviction and pay over the odds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MarketUrgency {
+    /// How many new clubs may open talks for one user player in a day.
+    pub(crate) new_offers_per_player_per_day: usize,
+    /// An AI club completes a purchase only for a target more appealing than this.
+    pub(crate) ai_deal_score_threshold: i32,
+    /// What a club offers, as a percentage of its valuation, before it is capped at what it can pay.
+    pub(crate) fee_premium_pct: u64,
+}
+
+impl MarketUrgency {
+    pub(crate) fn for_window(window: &domain::season::TransferWindowContext) -> Self {
+        let urgent = match window.status {
+            TransferWindowStatus::DeadlineDay => true,
+            TransferWindowStatus::Open => window
+                .days_remaining
+                .is_some_and(|days| days <= DEADLINE_URGENCY_DAYS),
+            TransferWindowStatus::Closed => false,
+        };
+        if urgent {
+            Self {
+                new_offers_per_player_per_day: MAX_NEW_INCOMING_OFFERS_PER_USER_PLAYER_PER_DAY + 1,
+                ai_deal_score_threshold: 50,
+                fee_premium_pct: 110,
+            }
+        } else {
+            Self {
+                new_offers_per_player_per_day: MAX_NEW_INCOMING_OFFERS_PER_USER_PLAYER_PER_DAY,
+                ai_deal_score_threshold: 60,
+                fee_premium_pct: 100,
+            }
+        }
+    }
+
+    /// What a club offers for a player it values at `valuation`, never more than `ceiling`, the
+    /// most it can pay (and never less than the valuation it could already afford).
+    pub(crate) fn offered_fee(self, valuation: u64, ceiling: u64) -> u64 {
+        let pushed = valuation.saturating_mul(self.fee_premium_pct) / 100;
+        pushed.min(ceiling).max(valuation)
+    }
+}
+
+/// How much a club's plans add to a target's appeal: more for a position group it is short in,
+/// more for a young player it can build around, less for one in his thirties.
+pub(crate) fn squad_planning_bonus(position_group: usize, group_depth: usize, age: i32) -> i32 {
+    let planned = PLANNED_GROUP_DEPTH
+        .get(position_group)
+        .copied()
+        .unwrap_or(0);
+    let missing = planned
+        .saturating_sub(group_depth)
+        .min(MAX_MISSING_PLAYERS_WEIGHED);
+    let need = i32::try_from(missing).unwrap_or(0) * THIN_GROUP_BONUS_PER_MISSING_PLAYER;
+    let age_weight = match age {
+        ..=21 => 8,
+        22..=24 => 4,
+        25..=29 => 0,
+        _ => -6,
+    };
+    need + age_weight
+}
+
+/// The buyer the sweep is choosing a target for, and what it already knows about it.
+struct BuyerView<'a> {
+    team: &'a Team,
+    depths: [usize; 4],
+    committed_fees: i64,
+    loan_offer_player_id: Option<&'a str>,
 }
 fn market_shortlist(
     game: &Game,
@@ -221,6 +318,7 @@ fn market_shortlist(
             fee: suggested_incoming_fee(current_date, player),
             position_group_index: position_group_index(&player.position),
             owner_reputation: team_reputation.get(owner_team_id).copied().unwrap_or(0),
+            age: domain::age::age_on_or_unknown(current_date, &player.date_of_birth),
         });
     }
     // Highest appeal first; a stable sort preserves the original ordering among
@@ -259,6 +357,7 @@ struct MarketSweep {
     cooled_clubs: std::collections::HashMap<String, HashSet<String>>,
     shortlist: Vec<MarketTarget>,
     reservations_by_club: std::collections::HashMap<String, i64>,
+    urgency: MarketUrgency,
 }
 impl MarketSweep {
     fn new(game: &Game) -> Self {
@@ -337,6 +436,7 @@ impl MarketSweep {
             cooled_clubs,
             shortlist,
             reservations_by_club,
+            urgency: MarketUrgency::for_window(&game.season_context.transfer_window),
         }
     }
     fn offer_loan_to_user(&mut self, game: &mut Game, buyer_team: &Team) -> Option<String> {
@@ -383,81 +483,109 @@ impl MarketSweep {
         loan_offer_player_id: Option<&str>,
     ) -> Option<MarketCandidate> {
         let buyer_id = buyer_team.id.as_str();
-        let buyer_depths = self
-            .position_depths
-            .get(buyer_id)
-            .copied()
-            .unwrap_or([0; 4]);
-        // The list is score-sorted, so the first target clearing this club's
-        // filters is its highest-appeal eligible signing.
+        let view = BuyerView {
+            team: buyer_team,
+            depths: self
+                .position_depths
+                .get(buyer_id)
+                .copied()
+                .unwrap_or([0; 4]),
+            committed_fees: self
+                .reservations_by_club
+                .get(buyer_id)
+                .copied()
+                .unwrap_or(0),
+            loan_offer_player_id,
+        };
         // Worked out once for this buyer, and only if a target gets as far as needing it.
         let mut buyer_wage_facts: Option<BuyerWageFacts> = None;
-        let committed_fees = self
-            .reservations_by_club
-            .get(buyer_id)
-            .copied()
-            .unwrap_or(0);
-        let chosen = self.shortlist.iter().find(|target| {
-            if target.owner_team_id == buyer_id || self.moved_player_ids.contains(&target.player_id)
-            {
-                return false;
-            }
-            if loan_offer_player_id == Some(target.player_id.as_str()) {
-                return false;
-            }
-            if target.is_user_owned {
-                let budget = IncomingOfferBudget {
-                    new_today: &self.new_offers_per_player,
-                    approach_clubs: &self.approach_clubs,
-                    cooled_clubs: &self.cooled_clubs,
-                };
-                if !budget.accepts(
-                    &target.player_id,
-                    buyer_id,
-                    MAX_NEW_INCOMING_OFFERS_PER_USER_PLAYER_PER_DAY,
-                ) || self.new_user_offers_today >= MAX_NEW_INCOMING_USER_OFFERS_PER_DAY
-                {
-                    return false;
-                }
-            } else if self.completed_ai_transfers >= MAX_COMPLETED_AI_TRANSFERS_PER_DAY {
-                return false;
-            }
-            // Clubs only chase players that fit their stature and a position they
-            // actually need, so a single star doesn't draw the whole division.
-            if !buyer_has_genuine_interest(
-                buyer_team.reputation,
-                target.owner_reputation,
-                buyer_depths[target.position_group_index],
-            ) {
-                return false;
-            }
-            can_afford_fee(buyer_team, target.fee, committed_fees)
-                && self
-                    .player_index
-                    .get(&target.player_id)
-                    .is_some_and(|&index| {
-                        let facts = buyer_wage_facts.get_or_insert_with(|| {
-                            BuyerWageFacts::new(
-                                self.wage_bills.get(buyer_id).copied().unwrap_or(0),
-                                buyer_depths,
-                            )
-                        });
-                        buyer_can_pay_standard_wage(
-                            &game.players[index],
-                            buyer_team,
-                            facts,
-                            self.current_date,
-                        )
-                    })
-        });
-
-        let target = chosen?;
+        // The list is score-sorted. The club weighs the best few it could sign against what its
+        // squad needs, so a thin position or a young prospect can edge a slightly more appealing
+        // player; the scan is bounded so a weak target far down the list never wins on need alone.
+        let target = self
+            .shortlist
+            .iter()
+            .filter(|target| self.target_is_eligible(game, &view, target, &mut buyer_wage_facts))
+            .take(SQUAD_PLANNING_SCAN_LIMIT)
+            .enumerate()
+            .max_by_key(|(rank, target)| {
+                let group_depth = view
+                    .depths
+                    .get(target.position_group_index)
+                    .copied()
+                    .unwrap_or(0);
+                let planned = target.score
+                    + squad_planning_bonus(target.position_group_index, group_depth, target.age);
+                (planned, std::cmp::Reverse(*rank))
+            })
+            .map(|(_, target)| target)?;
+        let ceiling = transfer_fee_ceiling(buyer_team, view.committed_fees);
         Some(MarketCandidate {
             player_id: target.player_id.clone(),
             owner_team_id: target.owner_team_id.clone(),
             score: target.score,
-            fee: target.fee,
+            fee: self.urgency.offered_fee(target.fee, ceiling),
         })
+    }
+    /// Whether the buyer in `view` could and would pursue `target` today.
+    fn target_is_eligible(
+        &self,
+        game: &Game,
+        view: &BuyerView<'_>,
+        target: &MarketTarget,
+        buyer_wage_facts: &mut Option<BuyerWageFacts>,
+    ) -> bool {
+        let buyer_id = view.team.id.as_str();
+        if target.owner_team_id == buyer_id || self.moved_player_ids.contains(&target.player_id) {
+            return false;
+        }
+        if view.loan_offer_player_id == Some(target.player_id.as_str()) {
+            return false;
+        }
+        if target.is_user_owned {
+            let budget = IncomingOfferBudget {
+                new_today: &self.new_offers_per_player,
+                approach_clubs: &self.approach_clubs,
+                cooled_clubs: &self.cooled_clubs,
+            };
+            if !budget.accepts(
+                &target.player_id,
+                buyer_id,
+                self.urgency.new_offers_per_player_per_day,
+            ) || self.new_user_offers_today >= MAX_NEW_INCOMING_USER_OFFERS_PER_DAY
+            {
+                return false;
+            }
+        } else if self.completed_ai_transfers >= MAX_COMPLETED_AI_TRANSFERS_PER_DAY {
+            return false;
+        }
+        // Clubs only chase players that fit their stature and a position they
+        // actually need, so a single star doesn't draw the whole division.
+        if !buyer_has_genuine_interest(
+            view.team.reputation,
+            target.owner_reputation,
+            view.depths[target.position_group_index],
+        ) {
+            return false;
+        }
+        can_afford_fee(view.team, target.fee, view.committed_fees)
+            && self
+                .player_index
+                .get(&target.player_id)
+                .is_some_and(|&index| {
+                    let facts = buyer_wage_facts.get_or_insert_with(|| {
+                        BuyerWageFacts::new(
+                            self.wage_bills.get(buyer_id).copied().unwrap_or(0),
+                            view.depths,
+                        )
+                    });
+                    buyer_can_pay_standard_wage(
+                        &game.players[index],
+                        view.team,
+                        facts,
+                        self.current_date,
+                    )
+                })
     }
     fn pursue_candidate(&mut self, game: &mut Game, buyer_team: &Team, candidate: MarketCandidate) {
         let buyer_id = buyer_team.id.as_str();
@@ -476,7 +604,7 @@ impl MarketSweep {
             return;
         }
 
-        if candidate.score <= 60
+        if candidate.score <= self.urgency.ai_deal_score_threshold
             || self.completed_ai_transfers >= MAX_COMPLETED_AI_TRANSFERS_PER_DAY
         {
             return;

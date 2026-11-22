@@ -436,19 +436,58 @@ pub fn make_transfer_bid(
     fee: u64,
 ) -> Result<TransferNegotiationOutcome, String> {
     expire_stale_transfer_offers(game);
-    let context = prepare_outgoing_bid(game, player_id, fee)?;
-    if fee >= context.adjusted_threshold {
+    let context = prepare_outgoing_bid(game, player_id, BidMoney::outright(fee))?;
+    resolve_outgoing_bid(game, player_id, fee, context)
+}
+/// What a bid is worth and what it costs the buyer. An outright fee is all three; a fee paid in
+/// instalments costs the buyer's cash only its upfront part, is worth less than its face value to
+/// the seller, and still takes the whole of it out of the transfer budget.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct BidMoney {
+    /// What the seller judges the bid by.
+    pub(super) valued: u64,
+    /// What leaves the buyer's cash on the day of the move.
+    pub(super) cash: u64,
+    /// What the deal takes out of the buyer's transfer budget.
+    pub(super) budget: u64,
+}
+impl BidMoney {
+    pub(super) fn outright(fee: u64) -> Self {
+        Self {
+            valued: fee,
+            cash: fee,
+            budget: fee,
+        }
+    }
+}
+/// Answer a bid of face value `fee`, judged by what it is worth to the seller. A bid that meets the
+/// player's release clause is agreed outright: the clause leaves his club nothing to haggle over.
+pub(super) fn resolve_outgoing_bid(
+    game: &mut Game,
+    player_id: &str,
+    fee: u64,
+    context: OutgoingBidContext,
+) -> Result<TransferNegotiationOutcome, String> {
+    let valued = context.valued;
+    if context.release_clause_met || valued >= context.adjusted_threshold {
         agree_outgoing_transfer(game, player_id, fee, context)
-    } else if fee >= context.counter_floor && context.round < NEGOTIATION_BREAK_OFF_ROUND {
+    } else if valued >= context.counter_floor && context.round < NEGOTIATION_BREAK_OFF_ROUND {
         record_outgoing_counter(game, player_id, fee, context)
     } else {
         record_outgoing_rejection(game, player_id, fee, context)
     }
 }
-struct OutgoingBidContext {
+pub(super) struct OutgoingBidContext {
+    pub(super) register_immediately: bool,
+    /// The bid's worth to the seller, which the thresholds below are measured against.
+    valued: u64,
+    /// The part of the fee paid on the day of the move.
+    cash_fee: u64,
+    release_clause_met: bool,
+    /// The tranches still to pay after the move, for a fee paid in instalments.
+    pub(super) schedule: Option<super::structured_bid::InstallmentSchedule>,
     user_team_id: String,
     owner_team_id: String,
-    register_immediately: bool,
     registration_date_string: String,
     date: String,
     round: u8,
@@ -504,10 +543,10 @@ fn outgoing_bid_terms(
         counter_floor,
     }
 }
-fn prepare_outgoing_bid(
+pub(super) fn prepare_outgoing_bid(
     game: &Game,
     player_id: &str,
-    fee: u64,
+    money: BidMoney,
 ) -> Result<OutgoingBidContext, String> {
     let current_date = game.clock.current_date.date_naive();
     let registration_date = transfer_registration_date(game)?;
@@ -546,8 +585,13 @@ fn prepare_outgoing_bid(
         .find(|t| t.id == user_team_id)
         .ok_or("be.error.managedTeamNotFound")?;
 
-    fee_block(my_team, fee, committed_transfer_fees(game, &my_team.id))
-        .map_err(|block| block.error_key().to_string())?;
+    fee_block_split(
+        my_team,
+        money.budget,
+        money.cash,
+        committed_transfer_fees(game, &my_team.id),
+    )
+    .map_err(|block| block.error_key().to_string())?;
 
     let owner_team = game
         .teams
@@ -560,7 +604,9 @@ fn prepare_outgoing_bid(
     let threshold = minimum_acceptable_fee(current_date, player, owner_team, buyer_team);
     let date = game.clock.current_date.format("%Y-%m-%d").to_string();
     let existing_offer = latest_negotiation_with_club(player, &user_team_id, current_date);
-    if talks_are_broken_off(existing_offer) {
+    let release_clause_met = release_clause_met(player, money.valued);
+    // Broken-off talks do not shield a player from his clause: paying it needs no talks.
+    if !release_clause_met && talks_are_broken_off(existing_offer) {
         return Err(ERR_TALKS_BROKEN_OFF.into());
     }
     let OutgoingBidTerms {
@@ -569,10 +615,14 @@ fn prepare_outgoing_bid(
         patience,
         adjusted_threshold,
         counter_floor,
-    } = outgoing_bid_terms(existing_offer, fee, threshold);
+    } = outgoing_bid_terms(existing_offer, money.valued, threshold);
     let openness_score = player_move_openness_score(current_date, player, owner_team, buyer_team);
 
     Ok(OutgoingBidContext {
+        valued: money.valued,
+        cash_fee: money.cash,
+        release_clause_met,
+        schedule: None,
         user_team_id,
         owner_team_id,
         register_immediately,
@@ -593,6 +643,8 @@ fn agree_outgoing_transfer(
     context: OutgoingBidContext,
 ) -> Result<TransferNegotiationOutcome, String> {
     let OutgoingBidContext {
+        cash_fee,
+        schedule,
         user_team_id,
         owner_team_id,
         register_immediately,
@@ -609,7 +661,7 @@ fn agree_outgoing_transfer(
     crate::squad_floor::ensure_departure_keeps_floor(game, player_id)?;
     ensure_buyer_can_pay_standard_wage(game, player_id, &user_team_id)?;
     if register_immediately {
-        ensure_transfer_cash_postable(game, &user_team_id, &owner_team_id, fee)?;
+        ensure_transfer_cash_postable(game, &user_team_id, &owner_team_id, cash_fee)?;
     }
     let status = if register_immediately {
         TransferOfferStatus::Accepted
@@ -634,7 +686,16 @@ fn agree_outgoing_transfer(
     };
 
     if register_immediately {
-        execute_transfer(game, player_id, &user_team_id, &owner_team_id, fee)?;
+        execute_transfer_with_schedule(
+            game,
+            player_id,
+            TransferParties {
+                buyer_team_id: &user_team_id,
+                seller_team_id: &owner_team_id,
+            },
+            fee,
+            schedule.as_ref(),
+        )?;
         close_open_offers_after_sale(game, player_id, &user_team_id, fee, Some(&offer_id))?;
     } else {
         reserve_player_for_pending_transfer(game, player_id, &offer_id)?;

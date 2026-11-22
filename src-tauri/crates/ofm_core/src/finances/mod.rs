@@ -1,14 +1,23 @@
+mod broadcast;
 pub mod cash_flow;
 pub mod gate;
+pub mod installments;
 pub mod journal;
 mod league_position;
+mod upkeep;
 mod weekly;
 
+pub use broadcast::tv_share_for;
 pub use domain::finance::{CashJournal, CashKind};
+pub use installments::{
+    amortized_book_value, outstanding_installments_owed, settle_due_installments,
+    straight_line_annual_amortization,
+};
 pub use journal::{
     PostRequest, backfill_opening_balances, credit_opening_cash, journal_matches_cash, post,
     post_all, validate_posts,
 };
+pub use upkeep::{calc_upkeep, stadium_matchday_upkeep};
 
 /// Weeks of committed wages a club must be able to cover after the weekly unit lock.
 pub const MIN_OPENING_RUNWAY_WEEKS: i64 = 16;
@@ -383,10 +392,6 @@ pub fn calc_cash_runway_weeks(balance: i64, projected_weekly_net: i64) -> Option
     Some(std::cmp::max(0, balance / projected_weekly_net.abs()))
 }
 
-pub fn calc_upkeep(_team: &Team) -> i64 {
-    0
-}
-
 pub fn team_finance_snapshot(game: &Game, team_id: &str) -> Option<TeamFinanceSnapshot> {
     let team = game.teams.iter().find(|team| team.id == team_id)?;
     let weekly_wage_spend = calc_wages(game, team_id);
@@ -404,7 +409,7 @@ pub fn team_finance_snapshot(game: &Game, team_id: &str) -> Option<TeamFinanceSn
     let weekly_matchday_income =
         gate::expected_gate_next_week(game, &team.id, team.stadium_capacity);
     let weekly_recurring_income = weekly_sponsor_income + weekly_matchday_income;
-    let projected_weekly_net = weekly_recurring_income - weekly_wage_spend;
+    let projected_weekly_net = weekly_recurring_income - weekly_wage_spend - calc_upkeep(team);
     let cash_runway_weeks = calc_cash_runway_weeks(team.finance, projected_weekly_net);
     let wage_budget_usage_percent = ((annual_wage_bill * 100) / std::cmp::max(1, team.wage_budget))
         .clamp(0, u32::MAX as i64) as u32;
@@ -1142,6 +1147,8 @@ fn commit_weekly_posts(game: &mut Game, reqs: &[PostRequest]) -> bool {
 /// - Deduct player wages (stored `Player.wage` is weekly; loanees split)
 /// - Deduct staff wages (stored `Staff.wage` is weekly)
 /// - Add matchday revenue for home matches played that week
+/// - Pay each club's broadcast share and the host's staging cost for every match played
+/// - Settle the transfer-fee instalments that have fallen due
 /// - Check financial health and generate warnings
 pub fn process_weekly_finances(game: &mut Game) {
     let weekday = game.clock.current_date.weekday().num_days_from_monday();
@@ -1178,6 +1185,9 @@ pub fn process_weekly_finances(game: &mut Game) {
     }
 
     gate::settle_gate_income(game, post_date);
+    // After the gate: it fixes the settlement window the broadcast share reads.
+    broadcast::settle_broadcast_and_matchday_costs(game, post_date);
+    settle_due_installments(game, post_date);
 
     // --- Financial health warnings for user's team ---
     generate_financial_warnings(game, &today);

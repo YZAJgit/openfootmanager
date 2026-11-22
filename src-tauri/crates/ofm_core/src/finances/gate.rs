@@ -23,7 +23,7 @@ const LEGACY_GATE_WINDOW_DAYS: i64 = 6;
 
 /// Payday runs every Monday, so an edition archived more than this many days ago has already been
 /// through a settlement since and holds nothing that a later one should pay.
-const PAYDAY_INTERVAL_DAYS: i64 = 7;
+pub(super) const PAYDAY_INTERVAL_DAYS: i64 = 7;
 
 fn gate_post_id(fixture_id: &str) -> String {
     format!("{GATE_POST_PREFIX}{fixture_id}")
@@ -123,7 +123,7 @@ fn settlement_start(game: &mut Game, today: NaiveDate) -> NaiveDate {
 
 /// [`settlement_start`] without fixing it: what a settlement today would take as its first date.
 /// The forecast reads it, so it never stores the cutover a payday has yet to fix.
-fn settlement_window_start(game: &Game, today: NaiveDate) -> NaiveDate {
+pub(super) fn settlement_window_start(game: &Game, today: NaiveDate) -> NaiveDate {
     let stored = game
         .gate_settled_from
         .as_deref()
@@ -142,6 +142,21 @@ fn settlement_window_start(game: &Game, today: NaiveDate) -> NaiveDate {
 /// can never count a gate payday would not pay, or miss one it would.
 fn due_fixtures(game: &Game, settled_from: NaiveDate, today: NaiveDate) -> Vec<&Fixture> {
     let paid = paid_fixture_ids(game);
+    completed_fixtures_between(game, settled_from, today)
+        .into_iter()
+        .filter(|fixture| !paid.contains(fixture.id.as_str()))
+        .collect()
+}
+
+/// The completed fixtures with a result played from `settled_from` to `today`, each once, whether
+/// paid or not. Gate settlement filters out the paid ones; broadcast settlement
+/// (`finances::broadcast`) reads the same window so a match's gate and its TV share are judged on
+/// the same fixtures.
+pub(super) fn completed_fixtures_between(
+    game: &Game,
+    settled_from: NaiveDate,
+    today: NaiveDate,
+) -> Vec<&Fixture> {
     let mut seen = HashSet::new();
     // A rollover clears the fixtures of the edition it archives, so a gate that failed before it
     // is retried from the archive. An edition completed before the cutover, or before the previous
@@ -165,7 +180,6 @@ fn due_fixtures(game: &Game, settled_from: NaiveDate, today: NaiveDate) -> Vec<&
             fixture.status == FixtureStatus::Completed
                 && fixture.result.is_some()
                 && fixture_date(fixture).is_some_and(|date| date >= settled_from && date <= today)
-                && !paid.contains(fixture.id.as_str())
                 && seen.insert(fixture.id.as_str())
         })
         .collect()

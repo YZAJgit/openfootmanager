@@ -23,22 +23,29 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 mod affordability;
+mod bidding_war;
 mod bids;
 use affordability::committed_transfer_fees_by_club;
 mod consts;
 mod execution;
 mod lifecycle;
+mod loan_recall;
 mod loans;
 mod market;
 mod notifications;
 mod registration;
+mod structured_bid;
 
 pub(crate) use affordability::{available_transfer_budget, committed_transfer_fees};
-pub(crate) use affordability::{can_afford_fee, fee_block, transfer_fee_ceiling};
+pub(crate) use affordability::{can_afford_fee, fee_block, fee_block_split, transfer_fee_ceiling};
+pub use bidding_war::competing_bids;
+use bidding_war::escalate_rival_bids;
 pub use bids::*;
+pub(crate) use consts::ERR_CANNOT_BID_ON_OWN_PLAYER;
 use consts::*;
 pub use execution::*;
 use lifecycle::*;
+pub use loan_recall::{LoanRecallRefusal, recall_loan};
 pub use loans::*;
 pub use market::*;
 use notifications::*;
@@ -46,6 +53,9 @@ use registration::*;
 pub use registration::{Listing, toggle_listing};
 pub(crate) use registration::{
     has_pending_transfer_registration, player_has_active_or_pending_loan,
+};
+pub use structured_bid::{
+    InstallmentTerms, InstallmentTermsError, StructuredBidError, make_structured_transfer_bid,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -140,6 +150,8 @@ pub(crate) struct MarketTarget {
     position_group_index: usize,
     /// Reputation of the player's current club, used for reputation-fit gating.
     owner_reputation: u32,
+    /// His age today, which a buyer planning its squad weighs.
+    age: i32,
 }
 
 pub(crate) struct LoanMarketCandidate {

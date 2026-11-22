@@ -801,6 +801,7 @@ fn apply_loan_purchase(game: &mut Game, terms: &LoanPurchaseTerms) -> Result<(),
         player.transfer_listed = false;
         player.loan_listed = false;
         player.active_loan = None;
+        clear_loan_terms(player);
         // Buying the player is a new contract on the buyer's terms from today. While on
         // loan the contract stayed the parent club's, so this is the moment it changes.
         record_movement(
@@ -1204,70 +1205,85 @@ pub fn process_loan_returns(game: &mut Game) {
             continue;
         }
 
-        let player_snapshot = game
-            .players
+        return_loanee_to_parent(game, &player_id);
+    }
+}
+
+/// Send a loanee home: back to his parent club with a free shirt number, out of every team sheet,
+/// with his loan and its terms cleared and the return recorded in his history. Nothing happens to
+/// a player who is not on loan.
+pub(super) fn return_loanee_to_parent(game: &mut Game, player_id: &str) {
+    let player_snapshot = game
+        .players
+        .iter()
+        .find(|player| player.id == player_id)
+        .cloned();
+    let loan_snapshot = player_snapshot
+        .as_ref()
+        .and_then(|player| player.active_loan.clone());
+    let movement_context = loan_snapshot.as_ref().map(|loan| {
+        (
+            loan.loan_team_id.clone(),
+            game.team_name_or_id(&loan.loan_team_id),
+            loan.parent_team_id.clone(),
+            game.team_name_or_id(&loan.parent_team_id),
+            loan.end_date.clone(),
+        )
+    });
+    let resolved_jersey_number = match (&player_snapshot, &loan_snapshot) {
+        (Some(snap), Some(loan)) => game
+            .teams
             .iter()
-            .find(|player| player.id == player_id)
-            .cloned();
-        let loan_snapshot = player_snapshot
-            .as_ref()
-            .and_then(|player| player.active_loan.clone());
-        let movement_context = loan_snapshot.as_ref().map(|loan| {
-            (
-                loan.loan_team_id.clone(),
-                game.team_name_or_id(&loan.loan_team_id),
-                loan.parent_team_id.clone(),
-                game.team_name_or_id(&loan.parent_team_id),
-                loan.end_date.clone(),
-            )
-        });
-        let resolved_jersey_number = match (&player_snapshot, &loan_snapshot) {
-            (Some(snap), Some(loan)) => game
-                .teams
-                .iter()
-                .find(|team| team.id == loan.parent_team_id)
-                .and_then(|team| crate::roster::resolve_jersey_for(game, snap, team)),
-            _ => None,
-        };
+            .find(|team| team.id == loan.parent_team_id)
+            .and_then(|team| crate::roster::resolve_jersey_for(game, snap, team)),
+        _ => None,
+    };
 
-        for team in &mut game.teams {
-            team.remove_player_references(&player_id);
-        }
 
-        if let Some(player) = game
-            .players
-            .iter_mut()
-            .find(|player| player.id == player_id)
-            && let Some(loan) = player.active_loan.take()
+    for team in &mut game.teams {
+        team.remove_player_references(player_id);
+    }
+
+    if let Some(player) = game
+        .players
+        .iter_mut()
+        .find(|player| player.id == player_id)
+        && let Some(loan) = player.active_loan.take()
+    {
+        player.team_id = Some(loan.parent_team_id);
+        player.jersey_number = resolved_jersey_number;
+        player.loan_listed = false;
+        clear_loan_terms(player);
+        if let Some((
+            loan_team_id,
+            loan_team_name,
+            parent_team_id,
+            parent_team_name,
+            loan_end_date,
+        )) = movement_context
         {
-            player.team_id = Some(loan.parent_team_id);
-            player.jersey_number = resolved_jersey_number;
-            player.loan_listed = false;
-            if let Some((
-                loan_team_id,
-                loan_team_name,
-                parent_team_id,
-                parent_team_name,
-                loan_end_date,
-            )) = movement_context
-            {
-                record_movement(
-                    player,
-                    PlayerMovementEntry {
-                        from_team_id: Some(loan_team_id),
-                        from_team_name: Some(loan_team_name),
-                        to_team_id: Some(parent_team_id),
-                        to_team_name: Some(parent_team_name),
-                        loan_end_date: Some(loan_end_date),
-                        ..PlayerMovementEntry::new(
-                            game.clock.current_date.format("%Y-%m-%d").to_string(),
-                            PlayerMovementKind::LoanReturn,
-                        )
-                    },
-                );
-            }
+            record_movement(
+                player,
+                PlayerMovementEntry {
+                    from_team_id: Some(loan_team_id),
+                    from_team_name: Some(loan_team_name),
+                    to_team_id: Some(parent_team_id),
+                    to_team_name: Some(parent_team_name),
+                    loan_end_date: Some(loan_end_date),
+                    ..PlayerMovementEntry::new(
+                        game.clock.current_date.format("%Y-%m-%d").to_string(),
+                        PlayerMovementKind::LoanReturn,
+                    )
+                },
+            );
         }
     }
+}
+
+/// The terms of a loan the player has left behind: they described that loan only.
+pub(super) fn clear_loan_terms(player: &mut Player) {
+    player.loan_recallable = false;
+    player.loan_guaranteed_minutes_pct = None;
 }
 
 #[cfg(test)]

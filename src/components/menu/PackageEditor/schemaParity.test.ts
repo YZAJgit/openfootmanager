@@ -38,6 +38,8 @@ const INTERFACE_FOR: Record<keyof typeof schemaFields, string> = {
   country: "CountryDef",
   competition: "CompetitionDef",
   world: "WorldMetaDef",
+  recordProvenanceEntry: "RecordProvenanceDef",
+  providerIdentity: "ProviderIdentityDef",
   // The one schema that is a single keyed document rather than a list of
   // entities, and the only one whose fields are snake_case.
   names: "NamesDefinition",

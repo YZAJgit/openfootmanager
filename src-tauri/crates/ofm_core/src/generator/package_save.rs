@@ -694,6 +694,71 @@ mod tests {
     const MANIFEST: &str =
         r#"{"schema":"world","id":"split","name":"Split","version":"1.0.0","license":"CC0-1.0"}"#;
 
+    /// Given a manifest with record-level source evidence, when the package editor saves it,
+    ///       then reloading the package retains its source, provider identity, date, and rights.
+    #[test]
+    fn record_provenance_survives_the_package_editor_save_round_trip() {
+        let manifest = json!({
+            "schema": "world",
+            "id": "source-aware-world",
+            "recordProvenance": [{
+                "entityKind": "player",
+                "entityId": "player-17",
+                "kind": "observed",
+                "providerIdentities": [{
+                    "provider": "fixture-provider",
+                    "providerEntityId": "fixture-9001"
+                }],
+                "source": "Fixture source",
+                "sourceUrl": "https://data.example.test/player/fixture-9001",
+                "asOf": "2025-05-31",
+                "retrievedAt": "2025-11-17T12:00:00Z",
+                "license": "Fixture license",
+                "licenseUrl": "https://data.example.test/license",
+                "distributionStatus": "restricted"
+            }]
+        });
+        let manifest_text = serde_json::to_string(&manifest).unwrap();
+        let dir = package_dir(&[("package.json", &manifest_text)]);
+        let edited = edited(&dir, |_| {});
+
+        save_package_files(&dir, &edited).expect("the editor save succeeds");
+        let (package, errors) = crate::generator::load_world_package_files(&dir);
+        let metadata = package
+            .meta
+            .expect("the manifest reloads")
+            .provenance_for(crate::generator::RecordEntityKind::Player, "player-17");
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert!(errors.is_empty(), "unexpected package errors: {errors:?}");
+        assert_eq!(metadata.kind, crate::generator::RecordDataKind::Observed);
+        assert_eq!(metadata.source.as_deref(), Some("Fixture source"));
+        assert_eq!(
+            metadata.source_url.as_deref(),
+            Some("https://data.example.test/player/fixture-9001")
+        );
+        assert_eq!(metadata.as_of.as_deref(), Some("2025-05-31"));
+        assert_eq!(
+            metadata.retrieved_at.as_deref(),
+            Some("2025-11-17T12:00:00Z")
+        );
+        assert_eq!(metadata.provider_identities.len(), 1);
+        assert_eq!(metadata.provider_identities[0].provider, "fixture-provider");
+        assert_eq!(
+            metadata.provider_identities[0].provider_entity_id,
+            "fixture-9001"
+        );
+        assert_eq!(metadata.license.as_deref(), Some("Fixture license"));
+        assert_eq!(
+            metadata.license_url.as_deref(),
+            Some("https://data.example.test/license")
+        );
+        assert_eq!(
+            metadata.distribution_status,
+            crate::generator::RecordRightsStatus::Restricted
+        );
+    }
+
     /// Given an unreadable entity directory, when a changed package is saved, then no file changes.
     #[cfg(unix)]
     #[test]

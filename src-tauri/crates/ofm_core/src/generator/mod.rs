@@ -5,6 +5,7 @@ pub mod definitions;
 pub mod file_format;
 mod generation;
 pub mod package;
+mod package_distribution;
 mod package_save;
 mod package_stack;
 mod package_warnings;
@@ -20,13 +21,20 @@ pub use file_format::{load_definition_file, parse_definition_str};
 pub use generation::ReputationScale;
 pub use package::{
     ConfederationDef, ConflictSeverity, CountryDef, MAX_ARCHIVE_BYTES, PackageError, PackageInfo,
-    PackageLock, PlayerCareerEntryDef, PlayerDef, RESERVED_PACKAGE_ID, StackConflict, StaffDef,
-    WorldMetaDef, WorldPackage, authored_reputations, extract_package_assets, hash_package_file,
-    is_manifest_metadata_error, is_unreadable, is_valid_package_id, load_world_package,
-    load_world_package_as_world, load_world_package_files, load_world_package_from_ofm,
-    merge_world_packages, qualify_package_asset_paths, read_logo_from_ofm,
-    read_package_manifest_from_ofm, validate_manifest, validate_package, validate_package_stack,
-    validate_references,
+    PackageLock, PlayerCareerEntryDef, PlayerDef, ProviderIdentityDef, RESERVED_PACKAGE_ID,
+    RecordDataKind, RecordEntityKind, RecordProvenanceDef, RecordRightsStatus, StackConflict,
+    StaffDef, WorldMetaDef, WorldPackage, authored_reputations, extract_package_assets,
+    hash_package_file, is_manifest_metadata_error, is_unreadable, is_valid_package_id,
+    load_world_package, load_world_package_as_world, load_world_package_files,
+    load_world_package_from_ofm, merge_world_packages, qualify_package_asset_paths,
+    read_logo_from_ofm, read_package_manifest_from_ofm, validate_manifest, validate_package,
+    validate_package_stack, validate_references,
+};
+pub use package_distribution::{
+    DistributionIssue, TRUSTED_RIGHTS_REVIEW_FORMAT_VERSION, TrustedRightsReview,
+    TrustedRightsReviewRegistry, provenance_fingerprint, record_payload_fingerprint,
+    validate_distribution_archive_files, validate_distribution_directory_files,
+    validate_package_distribution,
 };
 pub use package_save::{EditedPackage, save_package_files};
 pub use package_stack::{StackCheck, check_world_package_on_bases, stack_check};

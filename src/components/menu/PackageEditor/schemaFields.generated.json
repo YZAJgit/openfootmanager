@@ -58,6 +58,23 @@
     "weakFoot",
     "youth"
   ],
+  "providerIdentity": [
+    "provider",
+    "providerEntityId"
+  ],
+  "recordProvenanceEntry": [
+    "asOf",
+    "distributionStatus",
+    "entityId",
+    "entityKind",
+    "kind",
+    "license",
+    "licenseUrl",
+    "providerIdentities",
+    "retrievedAt",
+    "source",
+    "sourceUrl"
+  ],
   "staff": [
     "age",
     "attributes",
@@ -100,6 +117,7 @@
     "logo",
     "name",
     "packageType",
+    "recordProvenance",
     "version"
   ]
 }

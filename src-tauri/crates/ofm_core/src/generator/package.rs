@@ -197,6 +197,109 @@ pub struct StaffDef {
     pub known_as: Option<String>,
 }
 
+/// One external identifier for a package record.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderIdentityDef {
+    #[serde(default)]
+    pub provider: String,
+    #[serde(default)]
+    pub provider_entity_id: String,
+}
+
+/// The type of entity whose source information is recorded in a package manifest.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordEntityKind {
+    #[default]
+    Unknown,
+    World,
+    Team,
+    Player,
+    Staff,
+    Confederation,
+    Country,
+    Competition,
+    Names,
+}
+
+/// Whether a value was observed, estimated, generated, simulated, or has unknown origin.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RecordDataKind {
+    Observed,
+    Estimated,
+    Generated,
+    Simulated,
+    #[default]
+    Unverified,
+}
+
+/// The package author's declared redistribution status, independent of how the data was obtained.
+/// An `allowed` declaration is not trusted until a separate rights review confirms it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RecordRightsStatus {
+    Allowed,
+    Restricted,
+    #[default]
+    Unknown,
+}
+
+/// Provenance for one record, or one separately identified part of that record.
+///
+/// The package author's declared status is not an independent rights review. In particular, an
+/// `allowed` declaration remains unknown until a trusted review mechanism confirms it.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordProvenanceDef {
+    #[serde(default)]
+    pub entity_kind: RecordEntityKind,
+    #[serde(default)]
+    pub entity_id: String,
+    #[serde(default)]
+    pub kind: RecordDataKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provider_identities: Vec<ProviderIdentityDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retrieved_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_url: Option<String>,
+    #[serde(default)]
+    pub distribution_status: RecordRightsStatus,
+}
+
+impl RecordProvenanceDef {
+    /// Missing metadata on an older package is explicitly treated as unverified and unknown.
+    pub fn unknown(entity_kind: RecordEntityKind, entity_id: &str) -> Self {
+        Self {
+            entity_kind,
+            entity_id: entity_id.to_string(),
+            ..Self::default()
+        }
+    }
+
+    /// A manifest declaration alone is not proof of redistribution permission. This helper has
+    /// no access to the separately supplied trusted review registry, so `allowed` stays unknown;
+    /// restricted data stays restricted even if other fields are complete.
+    pub fn reviewed_distribution_status(&self) -> RecordRightsStatus {
+        match self.distribution_status {
+            RecordRightsStatus::Restricted => RecordRightsStatus::Restricted,
+            RecordRightsStatus::Allowed | RecordRightsStatus::Unknown => {
+                RecordRightsStatus::Unknown
+            }
+        }
+    }
+}
+
 /// Package-level metadata (at most one per package).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -239,6 +342,46 @@ pub struct WorldMetaDef {
     /// declares teams but no competitions. Absent = use the built-in defaults.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_league: Option<FallbackLeagueConfig>,
+    /// Per-record source and rights evidence. Missing old manifests deserialize as an empty list;
+    /// consumers must interpret each record without an entry as unverified with unknown rights.
+    #[serde(default)]
+    pub record_provenance: Vec<RecordProvenanceDef>,
+}
+
+impl WorldMetaDef {
+    /// Return a record's metadata, or an explicit unknown value for legacy/unannotated records.
+    /// Duplicate entries are unverified with their evidence discarded; if any duplicate declares
+    /// `restricted`, that restriction is preserved. Release-gate coverage validation is separate
+    /// so legacy packages can still load.
+    pub fn provenance_for(
+        &self,
+        entity_kind: RecordEntityKind,
+        entity_id: &str,
+    ) -> RecordProvenanceDef {
+        if entity_id.trim().is_empty() {
+            return RecordProvenanceDef::unknown(entity_kind, entity_id);
+        }
+
+        let matching: Vec<_> = self
+            .record_provenance
+            .iter()
+            .filter(|record| record.entity_kind == entity_kind && record.entity_id == entity_id)
+            .collect();
+        match matching.as_slice() {
+            [record] => (**record).clone(),
+            [] => RecordProvenanceDef::unknown(entity_kind, entity_id),
+            duplicates => {
+                let mut unknown = RecordProvenanceDef::unknown(entity_kind, entity_id);
+                if duplicates
+                    .iter()
+                    .any(|record| record.distribution_status == RecordRightsStatus::Restricted)
+                {
+                    unknown.distribution_status = RecordRightsStatus::Restricted;
+                }
+                unknown
+            }
+        }
+    }
 }
 
 /// Author-supplied shape for the auto-generated fallback league. Every field is
@@ -1694,11 +1837,21 @@ pub fn validate_package_stack(packages: &[&WorldPackage]) -> Vec<StackConflict> 
 /// **Meta merging**: `defaultActiveCompetitions` and `defaultActiveRegions` are
 /// unioned across all metas. `baseYear` takes the maximum value. `name` and
 /// other scalar fields come from the last non-empty value across all metas.
+/// Per-record provenance follows entity override order: an overridden record loses its prior
+/// provenance unless the later package declares a replacement. Later provenance declarations
+/// replace earlier declarations for the same key; duplicates inside one package remain intact.
 ///
 /// After merging, entity ids, references, and format are validated on the
 /// combined result. Manifest metadata errors are authoring issues; installed
 /// packages with missing metadata remain usable at runtime. Cross-package
 /// references resolve correctly because all entities are present first.
+fn provenance_key(
+    entity_kind: RecordEntityKind,
+    entity_id: &str,
+) -> Option<(RecordEntityKind, String)> {
+    (!entity_id.trim().is_empty()).then(|| (entity_kind, entity_id.to_string()))
+}
+
 pub fn merge_world_packages(packages: Vec<WorldPackage>) -> (WorldPackage, Vec<PackageError>) {
     use std::collections::BTreeMap;
 
@@ -1738,6 +1891,61 @@ pub fn merge_world_packages(packages: Vec<WorldPackage>) -> (WorldPackage, Vec<P
     let mut merged_names: Option<NamesDefinition> = None;
 
     for package in databases.into_iter().chain(patches) {
+        // Provenance follows the same last-wins rule as the effective entity. A later entity
+        // declaration clears its previous metadata even when the new package supplies none; a
+        // later manifest can then replace any inherited provenance entry. Empty ids are not
+        // addressable, so preserve them for the independent release check to report.
+        let mut replaced_provenance_keys = Vec::new();
+        for confederation in &package.confederations {
+            replaced_provenance_keys.extend(provenance_key(
+                RecordEntityKind::Confederation,
+                &confederation.id,
+            ));
+        }
+        for country in &package.countries {
+            replaced_provenance_keys.extend(provenance_key(RecordEntityKind::Country, &country.id));
+        }
+        for team in &package.teams {
+            replaced_provenance_keys.extend(provenance_key(RecordEntityKind::Team, &team.id));
+        }
+        for player in &package.players {
+            replaced_provenance_keys.extend(provenance_key(RecordEntityKind::Player, &player.id));
+        }
+        for staff in &package.staff {
+            replaced_provenance_keys.extend(provenance_key(RecordEntityKind::Staff, &staff.id));
+        }
+        for competition in &package.competitions {
+            replaced_provenance_keys.extend(provenance_key(
+                RecordEntityKind::Competition,
+                &competition.id,
+            ));
+        }
+        if let Some(names) = &package.names {
+            for country_id in names.pools.keys() {
+                replaced_provenance_keys
+                    .extend(provenance_key(RecordEntityKind::Names, country_id));
+            }
+        }
+        if let Some(meta) = &package.meta {
+            for record in &meta.record_provenance {
+                replaced_provenance_keys
+                    .extend(provenance_key(record.entity_kind, &record.entity_id));
+            }
+        }
+        if let Some(base) = merged_meta_base.as_mut() {
+            // The later manifest contributes to a different merged world declaration, so an
+            // earlier world-level source cannot describe it without an explicit replacement.
+            if package.meta.is_some() {
+                base.record_provenance
+                    .retain(|record| record.entity_kind != RecordEntityKind::World);
+            }
+            base.record_provenance.retain(|record| {
+                !replaced_provenance_keys
+                    .iter()
+                    .any(|(kind, id)| record.entity_kind == *kind && record.entity_id == *id)
+            });
+        }
+
         if let Some(meta) = package.meta {
             // Union the list fields; scalar fields take the last non-empty value.
             for id in &meta.default_active_competitions {
@@ -1784,6 +1992,9 @@ pub fn merge_world_packages(packages: Vec<WorldPackage>) -> (WorldPackage, Vec<P
                 if !meta.package_type.is_empty() {
                     base.package_type = meta.package_type;
                 }
+                // Append the later manifest's original list as-is: duplicates within one package
+                // must remain visible to provenance lookup and the separate release gate.
+                base.record_provenance.extend(meta.record_provenance);
             } else {
                 merged_meta_base = Some(meta);
             }
@@ -2391,6 +2602,364 @@ pub fn read_logo_from_ofm(archive_path: &Path, logo_path: &str) -> Option<String
 mod tests {
     use super::*;
     use crate::generator::{check_world_package_on_bases, stack_check};
+
+    /// Given a pre-provenance manifest, when it is read and written, then its records remain
+    /// explicitly unverified until a source is supplied.
+    #[test]
+    fn legacy_manifest_defaults_record_provenance_to_an_empty_unknown_set() {
+        let meta: WorldMetaDef = serde_json::from_value(serde_json::json!({
+            "schema": "world",
+            "id": "legacy-world",
+            "name": "Legacy world"
+        }))
+        .unwrap();
+
+        let normalized = meta.provenance_for(RecordEntityKind::Player, "legacy-player");
+        assert_eq!(normalized.kind, RecordDataKind::Unverified);
+        assert_eq!(
+            normalized.reviewed_distribution_status(),
+            RecordRightsStatus::Unknown
+        );
+
+        let round_trip = serde_json::to_value(meta).unwrap();
+        assert_eq!(round_trip["recordProvenance"], serde_json::json!([]));
+    }
+
+    /// Given duplicate source entries for one package record, when metadata is resolved, then it
+    /// stays unknown instead of selecting either declaration.
+    #[test]
+    fn duplicate_record_provenance_is_unverified_and_preserves_restriction() {
+        let meta: WorldMetaDef = serde_json::from_value(serde_json::json!({
+            "recordProvenance": [
+                {
+                    "entityKind": "player", "entityId": "player-17", "kind": "observed",
+                    "distributionStatus": "restricted"
+                },
+                {
+                    "entityKind": "player", "entityId": "player-17", "kind": "generated",
+                    "distributionStatus": "allowed"
+                }
+            ]
+        }))
+        .unwrap();
+
+        let normalized = meta.provenance_for(RecordEntityKind::Player, "player-17");
+        assert_eq!(normalized.kind, RecordDataKind::Unverified);
+        assert_eq!(
+            normalized.reviewed_distribution_status(),
+            RecordRightsStatus::Restricted
+        );
+        assert!(normalized.source.is_none());
+        assert!(normalized.provider_identities.is_empty());
+    }
+
+    #[test]
+    fn empty_provenance_entity_ids_never_match_lookup() {
+        let meta: WorldMetaDef = serde_json::from_value(serde_json::json!({
+            "recordProvenance": [{
+                "entityKind": "player",
+                "kind": "observed",
+                "distributionStatus": "restricted"
+            }]
+        }))
+        .unwrap();
+
+        for entity_id in ["", "player-17"] {
+            let normalized = meta.provenance_for(RecordEntityKind::Player, entity_id);
+            assert_eq!(normalized.kind, RecordDataKind::Unverified);
+            assert_eq!(
+                normalized.reviewed_distribution_status(),
+                RecordRightsStatus::Unknown
+            );
+        }
+    }
+
+    #[test]
+    fn patch_replacing_a_player_without_provenance_clears_the_old_source() {
+        let base = WorldPackage {
+            meta: Some(WorldMetaDef {
+                id: "base-world".into(),
+                package_type: "database".into(),
+                record_provenance: vec![RecordProvenanceDef {
+                    entity_kind: RecordEntityKind::Player,
+                    entity_id: "player-17".into(),
+                    kind: RecordDataKind::Observed,
+                    source: Some("Base provider".into()),
+                    distribution_status: RecordRightsStatus::Restricted,
+                    ..RecordProvenanceDef::default()
+                }],
+                ..WorldMetaDef::default()
+            }),
+            players: vec![
+                serde_json::from_value(serde_json::json!({
+                    "id": "player-17", "name": "Base version"
+                }))
+                .unwrap(),
+            ],
+            ..WorldPackage::default()
+        };
+        let patch = WorldPackage {
+            meta: Some(WorldMetaDef {
+                id: "patch-world".into(),
+                package_type: "patch".into(),
+                ..WorldMetaDef::default()
+            }),
+            players: vec![
+                serde_json::from_value(serde_json::json!({
+                    "id": "player-17", "name": "Patched version"
+                }))
+                .unwrap(),
+            ],
+            ..WorldPackage::default()
+        };
+
+        let (merged, _) = merge_world_packages(vec![base, patch]);
+        let normalized = merged
+            .meta
+            .unwrap()
+            .provenance_for(RecordEntityKind::Player, "player-17");
+        assert_eq!(normalized.kind, RecordDataKind::Unverified);
+        assert_eq!(
+            normalized.reviewed_distribution_status(),
+            RecordRightsStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn later_package_provenance_replaces_prior_declaration_for_a_retained_player() {
+        let base = WorldPackage {
+            meta: Some(WorldMetaDef {
+                id: "base-world".into(),
+                package_type: "database".into(),
+                record_provenance: vec![RecordProvenanceDef {
+                    entity_kind: RecordEntityKind::Player,
+                    entity_id: "player-17".into(),
+                    kind: RecordDataKind::Observed,
+                    distribution_status: RecordRightsStatus::Allowed,
+                    ..RecordProvenanceDef::default()
+                }],
+                ..WorldMetaDef::default()
+            }),
+            players: vec![
+                serde_json::from_value(serde_json::json!({
+                    "id": "player-17", "name": "Retained player"
+                }))
+                .unwrap(),
+            ],
+            ..WorldPackage::default()
+        };
+        let patch = WorldPackage {
+            meta: Some(WorldMetaDef {
+                id: "patch-world".into(),
+                package_type: "patch".into(),
+                record_provenance: vec![RecordProvenanceDef {
+                    entity_kind: RecordEntityKind::Player,
+                    entity_id: "player-17".into(),
+                    kind: RecordDataKind::Observed,
+                    distribution_status: RecordRightsStatus::Restricted,
+                    ..RecordProvenanceDef::default()
+                }],
+                ..WorldMetaDef::default()
+            }),
+            ..WorldPackage::default()
+        };
+
+        let (merged, _) = merge_world_packages(vec![base, patch]);
+        let normalized = merged
+            .meta
+            .unwrap()
+            .provenance_for(RecordEntityKind::Player, "player-17");
+        assert_eq!(
+            normalized.reviewed_distribution_status(),
+            RecordRightsStatus::Restricted
+        );
+    }
+
+    #[test]
+    fn overriding_a_name_pool_clears_its_old_provenance() {
+        let name_pool = |first_name: &str| crate::generator::NamePool {
+            first_names: vec![first_name.to_string()],
+            last_names: vec!["Surname".to_string()],
+        };
+        let base = WorldPackage {
+            meta: Some(WorldMetaDef {
+                package_type: "database".into(),
+                record_provenance: vec![RecordProvenanceDef {
+                    entity_kind: RecordEntityKind::Names,
+                    entity_id: "GB".into(),
+                    kind: RecordDataKind::Observed,
+                    distribution_status: RecordRightsStatus::Restricted,
+                    ..RecordProvenanceDef::default()
+                }],
+                ..WorldMetaDef::default()
+            }),
+            names: Some(NamesDefinition {
+                version: 1,
+                description: String::new(),
+                pools: std::collections::HashMap::from([("GB".into(), name_pool("Base"))]),
+            }),
+            ..WorldPackage::default()
+        };
+        let patch = WorldPackage {
+            meta: Some(WorldMetaDef {
+                package_type: "patch".into(),
+                ..WorldMetaDef::default()
+            }),
+            names: Some(NamesDefinition {
+                version: 1,
+                description: String::new(),
+                pools: std::collections::HashMap::from([("GB".into(), name_pool("Patch"))]),
+            }),
+            ..WorldPackage::default()
+        };
+
+        let (merged, _) = merge_world_packages(vec![base, patch]);
+        let meta = merged.meta.unwrap();
+        let normalized = meta.provenance_for(RecordEntityKind::Names, "GB");
+        assert_eq!(normalized.kind, RecordDataKind::Unverified);
+        assert_eq!(
+            normalized.reviewed_distribution_status(),
+            RecordRightsStatus::Unknown
+        );
+        let merged_pool = merged.names.as_ref().unwrap().pools.get("GB").unwrap();
+        assert_eq!(merged_pool.first_names, vec!["Patch".to_string()]);
+    }
+
+    #[test]
+    fn a_later_manifest_without_world_provenance_clears_the_old_world_source() {
+        let base = WorldPackage {
+            meta: Some(WorldMetaDef {
+                id: "base-world".into(),
+                package_type: "database".into(),
+                record_provenance: vec![RecordProvenanceDef {
+                    entity_kind: RecordEntityKind::World,
+                    entity_id: "base-world".into(),
+                    kind: RecordDataKind::Observed,
+                    distribution_status: RecordRightsStatus::Restricted,
+                    ..RecordProvenanceDef::default()
+                }],
+                ..WorldMetaDef::default()
+            }),
+            ..WorldPackage::default()
+        };
+        let patch = WorldPackage {
+            meta: Some(WorldMetaDef {
+                id: "merged-world".into(),
+                package_type: "patch".into(),
+                ..WorldMetaDef::default()
+            }),
+            ..WorldPackage::default()
+        };
+
+        let (merged, _) = merge_world_packages(vec![base, patch]);
+        let normalized = merged
+            .meta
+            .unwrap()
+            .provenance_for(RecordEntityKind::World, "base-world");
+        assert_eq!(normalized.kind, RecordDataKind::Unverified);
+        assert_eq!(
+            normalized.reviewed_distribution_status(),
+            RecordRightsStatus::Unknown
+        );
+    }
+
+    /// Given per-record provenance with a provider identity, when a manifest is loaded and saved,
+    ///       then source, date, identity and rights metadata survive the round trip.
+    #[test]
+    fn manifest_round_trips_record_provenance_and_provider_identity() {
+        let metadata = serde_json::json!({
+            "entityKind": "player",
+            "entityId": "player-17",
+            "kind": "observed",
+            "providerIdentities": [{
+                "provider": "fixture-provider",
+                "providerEntityId": "fixture-9001"
+            }],
+            "source": "Fixture source",
+            "sourceUrl": "https://data.example.test/player/fixture-9001",
+            "asOf": "2025-05-31",
+            "retrievedAt": "2025-11-17T12:00:00Z",
+            "license": "Fixture license",
+            "licenseUrl": "https://data.example.test/license",
+            "distributionStatus": "restricted"
+        });
+        let meta: WorldMetaDef = serde_json::from_value(serde_json::json!({
+            "id": "source-aware-world",
+            "recordProvenance": [metadata.clone()]
+        }))
+        .unwrap();
+
+        let round_trip = serde_json::to_value(meta).unwrap();
+        assert_eq!(round_trip["recordProvenance"][0], metadata);
+    }
+
+    #[test]
+    fn provenance_enum_values_match_the_documented_wire_names() {
+        for (wire, expected) in [
+            ("unknown", RecordEntityKind::Unknown),
+            ("world", RecordEntityKind::World),
+            ("team", RecordEntityKind::Team),
+            ("player", RecordEntityKind::Player),
+            ("staff", RecordEntityKind::Staff),
+            ("confederation", RecordEntityKind::Confederation),
+            ("country", RecordEntityKind::Country),
+            ("competition", RecordEntityKind::Competition),
+            ("names", RecordEntityKind::Names),
+        ] {
+            assert_eq!(
+                serde_json::from_value::<RecordEntityKind>(serde_json::json!(wire)).unwrap(),
+                expected
+            );
+        }
+        for (wire, expected) in [
+            ("observed", RecordDataKind::Observed),
+            ("estimated", RecordDataKind::Estimated),
+            ("generated", RecordDataKind::Generated),
+            ("simulated", RecordDataKind::Simulated),
+            ("unverified", RecordDataKind::Unverified),
+        ] {
+            assert_eq!(
+                serde_json::from_value::<RecordDataKind>(serde_json::json!(wire)).unwrap(),
+                expected
+            );
+        }
+        for (wire, expected) in [
+            ("allowed", RecordRightsStatus::Allowed),
+            ("restricted", RecordRightsStatus::Restricted),
+            ("unknown", RecordRightsStatus::Unknown),
+        ] {
+            assert_eq!(
+                serde_json::from_value::<RecordRightsStatus>(serde_json::json!(wire)).unwrap(),
+                expected
+            );
+        }
+    }
+
+    /// Given a package author declares redistribution is allowed and supplies evidence, when
+    ///       rights are reviewed without an independent review, then the result stays unknown.
+    #[test]
+    fn a_manifest_cannot_grant_redistribution_permission() {
+        let mut provenance = RecordProvenanceDef {
+            entity_kind: RecordEntityKind::Player,
+            entity_id: "player-17".to_string(),
+            source_url: Some("https://data.example.test/player/17".to_string()),
+            as_of: Some("2025-05-31".to_string()),
+            license: Some("Fixture license".to_string()),
+            distribution_status: RecordRightsStatus::Allowed,
+            ..RecordProvenanceDef::default()
+        };
+
+        provenance.license_url = Some("https://data.example.test/license".to_string());
+        assert_eq!(
+            provenance.reviewed_distribution_status(),
+            RecordRightsStatus::Unknown
+        );
+        provenance.distribution_status = RecordRightsStatus::Restricted;
+        assert_eq!(
+            provenance.reviewed_distribution_status(),
+            RecordRightsStatus::Restricted
+        );
+    }
 
     /// Given a safe path alias, when the shared archive pass validates it, then it exposes the normalized path.
     #[test]

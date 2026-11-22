@@ -37,9 +37,44 @@ export interface WorldMetaDef {
   defaultActiveRegions: string[];
   defaultActiveCompetitions: string[];
   logo: string | null;
+  /** Per-record origin, provider identity, retrieval date, and distribution-rights evidence. */
+  recordProvenance?: RecordProvenanceDef[];
   // Optional overrides for the league auto-generated when a package has teams
   // but no competitions. Edited from the Metadata section.
   fallbackLeague?: FallbackLeagueConfig | null;
+}
+
+export type RecordEntityKind =
+  | "unknown"
+  | "world"
+  | "team"
+  | "player"
+  | "staff"
+  | "confederation"
+  | "country"
+  | "competition"
+  | "names";
+
+export type RecordDataKind = "observed" | "estimated" | "generated" | "simulated" | "unverified";
+export type RecordRightsStatus = "allowed" | "restricted" | "unknown";
+
+export interface ProviderIdentityDef {
+  provider: string;
+  providerEntityId: string;
+}
+
+export interface RecordProvenanceDef {
+  entityKind: RecordEntityKind;
+  entityId: string;
+  kind: RecordDataKind;
+  providerIdentities?: ProviderIdentityDef[];
+  source?: string | null;
+  sourceUrl?: string | null;
+  asOf?: string | null;
+  retrievedAt?: string | null;
+  license?: string | null;
+  licenseUrl?: string | null;
+  distributionStatus: RecordRightsStatus;
 }
 
 export interface FallbackLeagueConfig {

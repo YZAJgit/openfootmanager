@@ -12,5 +12,6 @@ pub mod save_load_error;
 pub mod save_manager;
 #[cfg(test)]
 pub(crate) mod stored_text;
+pub mod world_db;
 
 pub use save_load_error::SaveLoadError;

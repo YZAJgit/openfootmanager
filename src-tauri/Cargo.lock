@@ -2999,6 +2999,7 @@ dependencies = [
  "ofm_core",
  "serde_json",
  "serde_yaml",
+ "tempfile",
 ]
 
 [[package]]
@@ -3019,6 +3020,7 @@ dependencies = [
  "serde_yaml",
  "sha2 0.10.9",
  "ts-rs",
+ "url",
  "uuid",
  "zip",
 ]

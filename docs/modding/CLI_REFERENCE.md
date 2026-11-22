@@ -158,6 +158,57 @@ See the [Error Codes Reference](#error-codes) below for a full list of error cod
 
 ---
 
+### Distribution readiness checks
+
+`ofm-cli release-check <path>` checks a package directory or `.ofm` archive for complete,
+unambiguous record provenance and independently reviewed redistribution rights. It validates a
+temporary snapshot and does not modify the input. `ofm-cli pack --for-distribution` validates the
+staged `.ofm` archive before publishing it; if any check fails, no distribution archive is written.
+The output path must be outside the package directory.
+
+```bash
+ofm-cli release-check my-league --rights-review trusted-rights-reviews.json
+ofm-cli pack my-league --for-distribution --rights-review trusted-rights-reviews.json
+```
+
+`--rights-review` names a JSON registry maintained separately from the package. Its shape is:
+
+```json
+{
+  "formatVersion": 1,
+  "reviews": [
+    {
+      "packageId": "my-league",
+      "entityKind": "player",
+      "entityId": "player-17",
+      "provenanceSha256": "<fingerprint from ofm_core::generator::provenance_fingerprint>",
+      "recordSha256": "<fingerprint from ofm_core::generator::record_payload_fingerprint>",
+      "status": "allowed",
+      "reviewer": "Release reviewer",
+      "reviewedAt": "2026-11-18",
+      "evidenceUrl": "https://example.org/license-review/player-17"
+    }
+  ]
+}
+```
+
+The registry must be protected and independently reviewed by the distributor. The CLI accepts
+the path supplied by its caller and does not authenticate who created that file; never take a
+registry from the package being checked. Each approval binds to the package id, record key, and
+SHA-256 of the complete provenance entry. Changing any provenance field makes that approval
+stale. `recordSha256` also binds the typed entity payload and package-level manifest, so changing
+player/team/competition data or package metadata invalidates the review. The registry needs one
+matching `allowed` review per package record; `restricted`, missing, duplicate, orphan, or stale
+entries fail. The author-supplied `distributionStatus` is not itself approval. With no registry
+file, every record remains blocked.
+
+Distribution mode currently permits only recognized world-data JSON/YAML files. It rejects
+translation bundles, images, README/license sidecars, and other files because they do not yet have
+their own source/license provenance records. Normal authoring `pack` continues to include such
+files; add file-level provenance before using them in a distributable data package. Distribution
+file paths must also be ASCII so Unicode-normalization aliases cannot resolve to different files on
+different platforms. ZIP directory entries must be empty.
+
 ### `ofm-cli pack <dir>`
 
 Validate a package directory and, if valid, build a `.ofm` archive.
@@ -178,11 +229,21 @@ ofm-cli pack my-league --output ~/releases/my-league-1.0.0.ofm
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--output <path>` | `<id>.ofm` in current directory | Output file path |
+| `--for-distribution` | off | Run the release provenance and rights gate before writing the archive |
+| `--rights-review <file>` | none | Trusted external review registry; accepted with `--for-distribution` |
 
 **Notes:**
 - Runs the package's own checks first; if there are errors the archive is not created and a full error list is printed. It does not check a patch's references to its base database (it prints a note saying so): use `validate --base` for that
 - The default output name reads the `id` field from `package.json`
 - The archive includes all files in the directory (data + assets). Non-data files (`.md`, `.txt`, images) are preserved but not parsed by the loader
+- Without `--for-distribution`, `pack` remains an authoring/export action and does not claim the package is ready to redistribute
+
+### `ofm-cli release-check <path>`
+
+Checks distribution readiness without creating or modifying an archive. `path` can be a package
+directory or an existing `.ofm` file. Accepts the same optional `--rights-review <file>` registry
+described above. Exit code is `0` only when structural package validation and the distribution
+gate both pass; otherwise it is `1`.
 
 ---
 

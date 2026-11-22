@@ -5,9 +5,13 @@ use ofm_core::generator::{
     entity_template, export_directory_to_ofm, is_valid_package_id, load_world_package,
     load_world_package_from_ofm, new_package_meta, package_warnings,
     read_package_manifest_from_ofm, scaffold_package, slugify, stack_check, stack_checked_warnings,
-    EntityKind as CoreEntityKind,
+    validate_distribution_archive_files, validate_distribution_directory_files, validate_package,
+    validate_package_distribution, DistributionIssue, EntityKind as CoreEntityKind,
+    TrustedRightsReview, TrustedRightsReviewRegistry, MAX_ARCHIVE_BYTES,
+    TRUSTED_RIGHTS_REVIEW_FORMAT_VERSION,
 };
 use serde_json::{json, Value};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -67,6 +71,19 @@ enum Commands {
         /// Output path (default: <id>.ofm in current directory)
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Require complete provenance and a matching trusted rights-review registry before writing.
+        #[arg(long)]
+        for_distribution: bool,
+        /// Trusted review registry maintained separately from the package.
+        #[arg(long, requires = "for_distribution")]
+        rights_review: Option<PathBuf>,
+    },
+    /// Check whether a package directory or .ofm archive is ready for distribution
+    ReleaseCheck {
+        path: PathBuf,
+        /// Trusted review registry maintained separately from the package
+        #[arg(long)]
+        rights_review: Option<PathBuf>,
     },
     /// Show metadata from a .ofm file
     Info { file: PathBuf },
@@ -126,7 +143,22 @@ fn main() {
             &format,
         ),
         Commands::Validate { path, base } => cmd_validate(&path, &base),
-        Commands::Pack { dir, output } => cmd_pack(&dir, output.as_deref()),
+        Commands::Pack {
+            dir,
+            output,
+            for_distribution,
+            rights_review,
+        } => {
+            if for_distribution {
+                cmd_pack_for_distribution(&dir, output.as_deref(), rights_review.as_deref())
+            } else {
+                cmd_pack(&dir, output.as_deref())
+            }
+        }
+        Commands::ReleaseCheck {
+            path,
+            rights_review,
+        } => cmd_release_check(&path, rights_review.as_deref()),
         Commands::Info { file } => cmd_info(&file),
     };
     std::process::exit(exit_code);
@@ -163,11 +195,31 @@ const SCHEMA_WORLD: &str = r##"// World manifest — save as package.json at the
   "defaultActiveRegions": [],  // optional: region IDs enabled by default
   "defaultActiveCompetitions": [], // optional: competition IDs enabled by default
   "logo": null,                // optional: relative path to a package logo image asset
-  "fallbackLeague": null       // optional: overrides for the auto-generated league
+  "fallbackLeague": null,      // optional: overrides for the auto-generated league
                                // when a database package has teams but no
                                // competitions, e.g.
                                // { "name": "My League", "legs": 2,
                                //   "scope": "Domestic" }
+
+  "recordProvenance": []       // optional: per-record source, date, identity, data kind and
+                               // redistribution-rights claims. Missing records are
+                               // unverified/unknown; conflicting entries discard evidence but
+                               // preserve any `restricted` declaration. `allowed` is a claim,
+                               // not proof; distribution requires a separately maintained review
+                               // registry via `release-check` or `pack --for-distribution`.
+                               // `entityId` is the entity's id; for `names` it is the ISO
+                               // alpha-2 country code of one name pool. Career-history entries
+                               // have no stable ID yet and cannot be addressed separately.
+                               // Example entry (asOf is a date; retrievedAt is RFC3339 UTC):
+                               // { "entityKind": "player", "entityId": "player-17",
+                               //   "kind": "observed", "providerIdentities": [{
+                               //     "provider": "provider-name", "providerEntityId": "123"
+                               //   }], "source": "Provider page",
+                               //   "sourceUrl": "https://example.test/player/123",
+                               //   "asOf": "2025-05-31", "retrievedAt": "2025-06-01T12:00:00Z",
+                               //   "license": "CC-BY-4.0",
+                               //   "licenseUrl": "https://example.test/license",
+                               //   "distributionStatus": "unknown" }
 }"##;
 
 const SCHEMA_TEAM: &str = r##"// Team entity — place inside teams/*.json in the "items" array.
@@ -671,6 +723,280 @@ fn issue_text(issue: &ofm_core::generator::PackageError) -> String {
     }
 }
 
+const MAX_RIGHTS_REVIEW_REGISTRY_BYTES: u64 = 16 * 1024 * 1024;
+
+fn read_trusted_rights_reviews(path: Option<&Path>) -> Result<Vec<TrustedRightsReview>, String> {
+    let Some(path) = path else {
+        return Ok(Vec::new());
+    };
+    let file = std::fs::File::open(path).map_err(|error| {
+        format!(
+            "cannot read rights-review registry {}: {error}",
+            path.display()
+        )
+    })?;
+    let metadata = file.metadata().map_err(|error| {
+        format!(
+            "cannot inspect rights-review registry {}: {error}",
+            path.display()
+        )
+    })?;
+    if !metadata.is_file() {
+        return Err(format!(
+            "rights-review registry {} is not a regular file",
+            path.display()
+        ));
+    }
+    if metadata.len() > MAX_RIGHTS_REVIEW_REGISTRY_BYTES {
+        return Err(format!(
+            "rights-review registry {} exceeds the 16 MiB limit",
+            path.display()
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_RIGHTS_REVIEW_REGISTRY_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            format!(
+                "cannot read rights-review registry {}: {error}",
+                path.display()
+            )
+        })?;
+    if bytes.len() as u64 > MAX_RIGHTS_REVIEW_REGISTRY_BYTES {
+        return Err(format!(
+            "rights-review registry {} exceeds the 16 MiB limit",
+            path.display()
+        ));
+    }
+    let registry: TrustedRightsReviewRegistry = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("invalid rights-review registry {}: {error}", path.display()))?;
+    if registry.format_version != TRUSTED_RIGHTS_REVIEW_FORMAT_VERSION {
+        return Err(format!(
+            "unsupported rights-review registry formatVersion {} (supported: {})",
+            registry.format_version, TRUSTED_RIGHTS_REVIEW_FORMAT_VERSION
+        ));
+    }
+    Ok(registry.reviews)
+}
+
+fn temporary_directory_outside(package_dir: &Path) -> Result<PathBuf, String> {
+    let package_root = std::fs::canonicalize(package_dir)
+        .map_err(|error| format!("cannot resolve package directory: {error}"))?;
+    let temporary_directory = std::fs::canonicalize(std::env::temp_dir())
+        .map_err(|error| format!("cannot resolve temporary directory: {error}"))?;
+    if temporary_directory.starts_with(&package_root) {
+        return Err("temporary archive location is inside the package directory".into());
+    }
+    Ok(temporary_directory)
+}
+
+fn staged_archive_in(directory: &Path) -> Result<tempfile::TempPath, String> {
+    tempfile::Builder::new()
+        .prefix(".ofm-release-")
+        .suffix(".ofm")
+        .tempfile_in(directory)
+        .map(tempfile::NamedTempFile::into_temp_path)
+        .map_err(|error| format!("cannot create a temporary archive: {error}"))
+}
+
+fn stage_input_for_release_check(path: &Path) -> Result<tempfile::TempPath, String> {
+    if path.is_dir() {
+        let temporary_directory = temporary_directory_outside(path)?;
+        let staged = staged_archive_in(&temporary_directory)?;
+        export_directory_to_ofm(path, &staged)
+            .map_err(|error| format!("cannot snapshot package directory: {error}"))?;
+        return Ok(staged);
+    }
+
+    let source = std::fs::File::open(path)
+        .map_err(|error| format!("cannot read package archive {}: {error}", path.display()))?;
+    let metadata = source
+        .metadata()
+        .map_err(|error| format!("cannot inspect package archive {}: {error}", path.display()))?;
+    if !metadata.is_file() {
+        return Err(format!(
+            "package archive {} is not a regular file",
+            path.display()
+        ));
+    }
+    if metadata.len() > MAX_ARCHIVE_BYTES {
+        return Err("package archive exceeds the 256 MiB limit".into());
+    }
+    let temporary_directory = std::fs::canonicalize(std::env::temp_dir())
+        .map_err(|error| format!("cannot resolve temporary directory: {error}"))?;
+    let mut staged_file = tempfile::Builder::new()
+        .prefix(".ofm-release-")
+        .suffix(".ofm")
+        .tempfile_in(temporary_directory)
+        .map_err(|error| format!("cannot create a temporary archive: {error}"))?;
+    let copied = std::io::copy(
+        &mut source.take(MAX_ARCHIVE_BYTES + 1),
+        staged_file.as_file_mut(),
+    )
+    .map_err(|error| format!("cannot snapshot package archive: {error}"))?;
+    if copied > MAX_ARCHIVE_BYTES {
+        return Err("package archive exceeds the 256 MiB limit".into());
+    }
+    Ok(staged_file.into_temp_path())
+}
+
+fn check_distribution_archive(
+    path: &Path,
+    reviews: &[TrustedRightsReview],
+) -> (
+    Vec<ofm_core::generator::PackageError>,
+    Vec<DistributionIssue>,
+) {
+    let (package, mut package_errors) = load_world_package_from_ofm(path);
+    package_errors.extend(validate_package(&package));
+    let mut issues = validate_package_distribution(&package, reviews);
+    issues.extend(validate_distribution_archive_files(path));
+    (package_errors, issues)
+}
+
+fn distribution_output_parent(package_dir: &Path, output_path: &Path) -> Result<PathBuf, String> {
+    let package_root = std::fs::canonicalize(package_dir)
+        .map_err(|error| format!("cannot resolve package directory: {error}"))?;
+    let parent = output_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let parent = std::fs::canonicalize(parent)
+        .map_err(|error| format!("cannot resolve output directory: {error}"))?;
+    if parent.starts_with(&package_root) {
+        return Err("distribution archive output must be outside the package directory".into());
+    }
+    Ok(parent)
+}
+
+fn pack_distribution_archive(
+    package_dir: &Path,
+    output_path: &Path,
+    reviews: &[TrustedRightsReview],
+) -> i32 {
+    let parent = match distribution_output_parent(package_dir, output_path) {
+        Ok(parent) => parent,
+        Err(error) => {
+            eprintln!("{} {error}", "error:".red().bold());
+            return 1;
+        }
+    };
+    let staged = match staged_archive_in(&parent) {
+        Ok(staged) => staged,
+        Err(error) => {
+            eprintln!("{} {error}", "error:".red().bold());
+            return 1;
+        }
+    };
+    if let Err(error) = export_directory_to_ofm(package_dir, &staged) {
+        eprintln!("{} Pack failed: {error}", "error:".red().bold());
+        return 1;
+    }
+    let (package_errors, issues) = check_distribution_archive(&staged, reviews);
+    if !package_errors.is_empty() || !issues.is_empty() {
+        println!(
+            "{} Staged distribution archive failed validation:",
+            "✗".red().bold()
+        );
+        for error in &package_errors {
+            println!("  {} {}", error.file.yellow(), issue_text(error).red());
+        }
+        print_distribution_issues(&issues);
+        return 1;
+    }
+    if let Err(error) = staged.persist(output_path) {
+        eprintln!(
+            "{} Cannot publish validated archive: {}",
+            "error:".red().bold(),
+            error.error
+        );
+        return 1;
+    }
+    let size = std::fs::metadata(output_path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    println!(
+        "{} Packed {} ({} KB)",
+        "✓".green().bold(),
+        output_path.display(),
+        size / 1024
+    );
+    0
+}
+
+fn distribution_issue_text(issue: &DistributionIssue) -> String {
+    format!("{:?} {} {}", issue.entity_kind, issue.entity_id, issue.code)
+}
+
+fn print_distribution_issues(issues: &[DistributionIssue]) {
+    for issue in issues {
+        println!("  {}", distribution_issue_text(issue).red());
+    }
+}
+
+fn cmd_release_check(path: &Path, rights_review_path: Option<&Path>) -> i32 {
+    if !path.exists() {
+        eprintln!(
+            "{} Package not found: {}",
+            "error:".red().bold(),
+            path.display()
+        );
+        return 1;
+    }
+    let reviews = match read_trusted_rights_reviews(rights_review_path) {
+        Ok(reviews) => reviews,
+        Err(error) => {
+            eprintln!("{} {error}", "error:".red().bold());
+            return 1;
+        }
+    };
+    let is_directory = path.is_dir();
+    if is_directory {
+        let source_issues = validate_distribution_directory_files(path);
+        if !source_issues.is_empty() {
+            println!(
+                "{} {} distribution blocker(s):",
+                "✗".red().bold(),
+                source_issues.len()
+            );
+            print_distribution_issues(&source_issues);
+            return 1;
+        }
+    }
+    let staged = match stage_input_for_release_check(path) {
+        Ok(staged) => staged,
+        Err(error) => {
+            eprintln!("{} {error}", "error:".red().bold());
+            return 1;
+        }
+    };
+    println!("Checking distribution readiness for {}...", path.display());
+    let (package_errors, issues) = check_distribution_archive(&staged, &reviews);
+    if !package_errors.is_empty() {
+        println!(
+            "{} {} package validation error(s):",
+            "✗".red().bold(),
+            package_errors.len()
+        );
+        for error in &package_errors {
+            println!("  {} {}", error.file.yellow(), issue_text(error).red());
+        }
+    }
+    if !issues.is_empty() {
+        println!(
+            "{} {} distribution blocker(s):",
+            "✗".red().bold(),
+            issues.len()
+        );
+        print_distribution_issues(&issues);
+    }
+    if !package_errors.is_empty() || !issues.is_empty() {
+        return 1;
+    }
+    println!("{} Package is ready for distribution.", "✓".green().bold());
+    0
+}
+
 /// Where `pack` writes when `--output` is not given.
 ///
 /// The package id names the artifact, falling back to the directory name. An
@@ -696,6 +1022,29 @@ fn default_pack_path(meta_id: Option<&str>, dir: &Path) -> PathBuf {
 }
 
 fn cmd_pack(dir: &Path, output: Option<&Path>) -> i32 {
+    cmd_pack_internal(dir, output, None)
+}
+
+fn cmd_pack_for_distribution(
+    dir: &Path,
+    output: Option<&Path>,
+    rights_review_path: Option<&Path>,
+) -> i32 {
+    let reviews = match read_trusted_rights_reviews(rights_review_path) {
+        Ok(reviews) => reviews,
+        Err(error) => {
+            eprintln!("{} {error}", "error:".red().bold());
+            return 1;
+        }
+    };
+    cmd_pack_internal(dir, output, Some(&reviews))
+}
+
+fn cmd_pack_internal(
+    dir: &Path,
+    output: Option<&Path>,
+    distribution_reviews: Option<&[TrustedRightsReview]>,
+) -> i32 {
     if !dir.exists() {
         eprintln!(
             "{} Directory not found: {}",
@@ -731,9 +1080,29 @@ fn cmd_pack(dir: &Path, output: Option<&Path>) -> i32 {
         return 1;
     }
 
+    if let Some(reviews) = distribution_reviews {
+        println!("Checking provenance and redistribution rights...");
+        let mut issues = validate_package_distribution(&pkg, reviews);
+        issues.extend(validate_distribution_directory_files(dir));
+        if !issues.is_empty() {
+            println!(
+                "{} {} distribution blocker(s); archive was not written:",
+                "✗".red().bold(),
+                issues.len()
+            );
+            print_distribution_issues(&issues);
+            return 1;
+        }
+        println!("{} Distribution checks passed.", "✓".green().bold());
+    }
+
     let out_path = output
         .map(PathBuf::from)
         .unwrap_or_else(|| default_pack_path(pkg.meta.as_ref().map(|m| m.id.as_str()), dir));
+
+    if let Some(reviews) = distribution_reviews {
+        return pack_distribution_archive(dir, &out_path, reviews);
+    }
 
     println!("Packing → {}...", out_path.display());
     match export_directory_to_ofm(dir, &out_path) {
@@ -870,6 +1239,207 @@ mod tests {
         assert!(out.exists(), "the archive should exist");
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Distribution packing is a separate release path and must refuse incomplete rights data.
+    #[test]
+    fn distribution_pack_refuses_unreviewed_package_without_writing_archive() {
+        let dir = scratch_dir("pack-distribution-unreviewed");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        std::fs::write(
+            dir.join("package.json"),
+            r#"{"schema":"world","id":"sample","name":"Sample","version":"1.0.0","license":"CC0-1.0"}"#,
+        )
+        .expect("manifest written");
+        let out = dir.join("release.ofm");
+
+        let code = cmd_pack_for_distribution(&dir, Some(&out), None);
+
+        assert_eq!(
+            code, 1,
+            "an authoring-valid but unreviewed package must not ship"
+        );
+        assert!(
+            !out.exists(),
+            "the release gate must run before archive creation"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Given an exactly reviewed package, directory checks and distribution packing validate the
+    /// staged archive, while output inside the source tree is rejected before it can self-include.
+    #[test]
+    fn distribution_pack_and_release_check_validate_staged_archives() {
+        use ofm_core::generator::{RecordEntityKind, RecordRightsStatus};
+
+        let dir = scratch_dir("pack-distribution-reviewed");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        std::fs::write(
+            dir.join("package.json"),
+            json!({
+                "schema":"world", "id":"sample", "name":"Sample", "version":"1.0.0",
+                "license":"CC0-1.0",
+                "recordProvenance":[{
+                    "entityKind":"world", "entityId":"sample", "kind":"observed",
+                    "providerIdentities":[{"provider":"archive","providerEntityId":"sample"}],
+                    "source":"Archive", "sourceUrl":"https://example.org/data",
+                    "asOf":"2026-01-01", "retrievedAt":"2026-01-02T12:00:00Z",
+                    "license":"CC0-1.0", "licenseUrl":"https://example.org/license",
+                    "distributionStatus":"allowed"
+                }]
+            })
+            .to_string(),
+        )
+        .expect("manifest written");
+
+        let (package, errors) = load_world_package(&dir);
+        assert!(
+            errors.is_empty(),
+            "package must be structurally valid: {errors:?}"
+        );
+        let provenance = &package.meta.as_ref().unwrap().record_provenance[0];
+        let registry = TrustedRightsReviewRegistry {
+            format_version: TRUSTED_RIGHTS_REVIEW_FORMAT_VERSION,
+            reviews: vec![TrustedRightsReview {
+                package_id: "sample".into(),
+                entity_kind: RecordEntityKind::World,
+                entity_id: "sample".into(),
+                provenance_sha256: ofm_core::generator::provenance_fingerprint(provenance).unwrap(),
+                record_sha256: ofm_core::generator::record_payload_fingerprint(
+                    &package,
+                    RecordEntityKind::World,
+                    "sample",
+                )
+                .unwrap(),
+                status: RecordRightsStatus::Allowed,
+                reviewer: "independent-reviewer".into(),
+                reviewed_at: "2026-11-18".into(),
+                evidence_url: "https://example.org/reviews/sample".into(),
+            }],
+        };
+        let registry_path = dir.with_extension("rights-review.json");
+        std::fs::write(&registry_path, serde_json::to_vec(&registry).unwrap())
+            .expect("review registry written outside package");
+
+        assert_eq!(cmd_release_check(&dir, Some(&registry_path)), 0);
+
+        let inside = dir.join("self-including.ofm");
+        assert_eq!(
+            cmd_pack_for_distribution(&dir, Some(&inside), Some(&registry_path)),
+            1
+        );
+        assert!(!inside.exists());
+
+        let archive = dir.with_extension("release.ofm");
+        assert_eq!(
+            cmd_pack_for_distribution(&dir, Some(&archive), Some(&registry_path)),
+            0
+        );
+        assert_eq!(cmd_release_check(&archive, Some(&registry_path)), 0);
+
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_file(registry_path).ok();
+        std::fs::remove_file(archive).ok();
+    }
+
+    /// Archive loading is intentionally permissive, but release-check must still apply package
+    /// structure validation even when the trusted review matches the invalid archive exactly.
+    #[test]
+    fn release_check_rejects_structurally_invalid_archive_with_matching_rights_review() {
+        use ofm_core::generator::{RecordEntityKind, RecordRightsStatus};
+
+        let dir = scratch_dir("release-check-invalid-archive");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        std::fs::write(
+            dir.join("package.json"),
+            json!({
+                "schema":"world", "id":"sample", "name":"Sample", "version":"1.0.0",
+                "license":"CC0-1.0", "formatVersion":99,
+                "recordProvenance":[{
+                    "entityKind":"world", "entityId":"sample", "kind":"observed",
+                    "providerIdentities":[{"provider":"archive","providerEntityId":"sample"}],
+                    "source":"Archive", "sourceUrl":"https://example.org/data",
+                    "asOf":"2026-01-01", "retrievedAt":"2026-01-02T12:00:00Z",
+                    "license":"CC0-1.0", "licenseUrl":"https://example.org/license",
+                    "distributionStatus":"allowed"
+                }]
+            })
+            .to_string(),
+        )
+        .expect("manifest written");
+
+        let (package, package_errors) = load_world_package(&dir);
+        assert!(package_errors
+            .iter()
+            .any(|error| { error.code == "be.error.package.unsupportedFormatVersion" }));
+        let provenance = &package.meta.as_ref().unwrap().record_provenance[0];
+        let review = TrustedRightsReview {
+            package_id: "sample".into(),
+            entity_kind: RecordEntityKind::World,
+            entity_id: "sample".into(),
+            provenance_sha256: ofm_core::generator::provenance_fingerprint(provenance).unwrap(),
+            record_sha256: ofm_core::generator::record_payload_fingerprint(
+                &package,
+                RecordEntityKind::World,
+                "sample",
+            )
+            .unwrap(),
+            status: RecordRightsStatus::Allowed,
+            reviewer: "independent-reviewer".into(),
+            reviewed_at: "2026-11-18".into(),
+            evidence_url: "https://example.org/reviews/sample".into(),
+        };
+        let registry = TrustedRightsReviewRegistry {
+            format_version: TRUSTED_RIGHTS_REVIEW_FORMAT_VERSION,
+            reviews: vec![review],
+        };
+        let registry_path = dir.with_extension("rights-review.json");
+        std::fs::write(&registry_path, serde_json::to_vec(&registry).unwrap())
+            .expect("review registry written outside package");
+        let archive = dir.with_extension("release.ofm");
+        export_directory_to_ofm(&dir, &archive).expect("archive written");
+
+        let code = cmd_release_check(&archive, Some(&registry_path));
+
+        assert_eq!(
+            code, 1,
+            "a matching rights review cannot bypass package validation"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_file(registry_path).ok();
+        std::fs::remove_file(archive).ok();
+    }
+
+    #[test]
+    fn distribution_cli_flags_parse_without_changing_default_pack_mode() {
+        let release_pack = Cli::try_parse_from([
+            "ofm-cli",
+            "pack",
+            "package-dir",
+            "--for-distribution",
+            "--rights-review",
+            "reviews.json",
+        ])
+        .expect("distribution pack arguments parse");
+        assert!(matches!(
+            release_pack.command,
+            Commands::Pack {
+                for_distribution: true,
+                rights_review: Some(_),
+                ..
+            }
+        ));
+
+        let authoring_pack = Cli::try_parse_from(["ofm-cli", "pack", "package-dir"])
+            .expect("normal authoring pack arguments parse");
+        assert!(matches!(
+            authoring_pack.command,
+            Commands::Pack {
+                for_distribution: false,
+                rights_review: None,
+                ..
+            }
+        ));
     }
 
     /// A real on-disk package, so these scenarios exercise pack's validation gate.
@@ -1660,6 +2230,34 @@ mod tests {
         );
     }
 
+    /// Given the provenance entry documented by `ofm-cli schema world`, when its commented JSON
+    /// is parsed, then it deserializes as the same record contract the package loader uses.
+    #[test]
+    fn the_record_provenance_example_in_the_world_schema_loads() {
+        use ofm_core::generator::RecordProvenanceDef;
+
+        let comment: String = SCHEMA_WORLD
+            .lines()
+            .skip_while(|line| !line.contains("// { \"entityKind\": \"player\""))
+            .take_while(|line| line.trim_start().starts_with("//"))
+            .map(|line| line.split_once("//").map_or("", |(_, text)| text.trim()))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let start = comment
+            .find('{')
+            .expect("the CLI schema shows a JSON example");
+        let end = comment.rfind('}').expect("the CLI example closes");
+        let example: RecordProvenanceDef = serde_json::from_str(&comment[start..=end])
+            .expect("the CLI schema example is valid provenance JSON");
+
+        assert_eq!(example.entity_id, "player-17");
+        assert_eq!(example.provider_identities.len(), 1);
+        assert_eq!(
+            example.retrieved_at.as_deref(),
+            Some("2025-06-01T12:00:00Z")
+        );
+    }
+
     /// Given the berth example in `ofm-cli schema competition`, which is commented out
     /// When its comment marker is removed and it is put in the competition
     /// Then the competition deserializes: the example an author copies is one that loads.
@@ -1735,6 +2333,31 @@ mod tests {
         assert_eq!(
             checked, EXAMPLES_IN_THE_REFERENCE,
             "an example appeared or vanished"
+        );
+    }
+
+    /// Given the record provenance example in `SCHEMA_REFERENCE.md`, when parsed, then every
+    /// documented field loads into the manifest definition used at runtime.
+    #[test]
+    fn the_record_provenance_example_in_the_schema_reference_loads() {
+        use ofm_core::generator::WorldMetaDef;
+
+        let reference = include_str!("../../../../docs/modding/SCHEMA_REFERENCE.md");
+        let body = reference
+            .split("```json")
+            .skip(1)
+            .map(|block| block.split("```").next().unwrap_or("").trim())
+            .find(|body| body.contains("\"recordProvenance\""))
+            .expect("the schema reference includes a recordProvenance example");
+        let manifest: WorldMetaDef =
+            serde_json::from_str(body).expect("the reference manifest example is valid JSON");
+
+        assert_eq!(manifest.record_provenance.len(), 1);
+        assert_eq!(manifest.record_provenance[0].entity_id, "player-17");
+        assert_eq!(manifest.record_provenance[0].provider_identities.len(), 1);
+        assert_eq!(
+            manifest.record_provenance[0].retrieved_at.as_deref(),
+            Some("2025-06-01T12:00:00Z")
         );
     }
 }

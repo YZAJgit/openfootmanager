@@ -892,12 +892,27 @@ mod tests {
             names.sort();
             expected.insert(kind.schema_name().to_string(), json!(names));
         }
-        let mut manifest_names: Vec<String> =
-            keys(&serde_json::to_value(populated_meta()).unwrap());
+        let meta = populated_meta();
+        let mut manifest_names: Vec<String> = keys(&serde_json::to_value(&meta).unwrap());
         manifest_names.sort();
         expected.insert(
             EntityKind::World.schema_name().to_string(),
             json!(manifest_names),
+        );
+        let provenance = serde_json::to_value(&meta.record_provenance[0]).unwrap();
+        let mut provenance_fields = keys(&provenance);
+        provenance_fields.sort();
+        expected.insert(
+            "recordProvenanceEntry".to_string(),
+            json!(provenance_fields),
+        );
+        let provider_identity =
+            serde_json::to_value(&meta.record_provenance[0].provider_identities[0]).unwrap();
+        let mut provider_identity_fields = keys(&provider_identity);
+        provider_identity_fields.sort();
+        expected.insert(
+            "providerIdentity".to_string(),
+            json!(provider_identity_fields),
         );
 
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -922,6 +937,7 @@ mod tests {
                 path.display()
             )
         });
+        let on_disk = on_disk.replace("\r\n", "\n");
         assert_eq!(
             on_disk.trim(),
             rendered.trim(),
@@ -949,6 +965,22 @@ mod tests {
             package_type: "database".into(),
             logo: Some("assets/images/logo.png".into()),
             fallback_league: Some(Default::default()),
+            record_provenance: vec![crate::generator::package::RecordProvenanceDef {
+                entity_kind: crate::generator::package::RecordEntityKind::Player,
+                entity_id: "sample-player".into(),
+                kind: crate::generator::package::RecordDataKind::Observed,
+                provider_identities: vec![crate::generator::package::ProviderIdentityDef {
+                    provider: "fixture-provider".into(),
+                    provider_entity_id: "fixture-1".into(),
+                }],
+                source: Some("Fixture source".into()),
+                source_url: Some("https://data.example.test/player/fixture-1".into()),
+                as_of: Some("2025-05-31".into()),
+                retrieved_at: Some("2025-11-17T12:00:00Z".into()),
+                license: Some("Fixture license".into()),
+                license_url: Some("https://data.example.test/license".into()),
+                distribution_status: crate::generator::package::RecordRightsStatus::Restricted,
+            }],
         }
     }
 

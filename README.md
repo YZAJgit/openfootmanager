@@ -90,6 +90,26 @@ app detects your GPUs at startup and picks a rendering path automatically; if yo
 window or a sluggish UI, [docs/LINUX_GRAPHICS.md](docs/LINUX_GRAPHICS.md) explains the
 `OFM_GPU_PROFILE` override and records the measurements behind the default.
 
+### Package authoring and distribution checks
+
+`ofm-cli pack <dir>` validates and builds an authoring `.ofm` archive. For a release intended
+for distribution, run the separate provenance and rights gate:
+
+```bash
+ofm-cli release-check ./my-world --rights-review ./trusted-rights-reviews.json
+ofm-cli pack ./my-world --for-distribution --rights-review ./trusted-rights-reviews.json
+```
+
+The review registry is independent of the package and must be maintained by the distributor's
+trusted reviewers. A package author's `distributionStatus: "allowed"` claim is not approval;
+without an exact review matching the package and the record's provenance fingerprint, the gate
+fails closed. The registry path is supplied by the caller and is not authenticated by `.ofm`, so
+a release process must protect and verify that file separately. See
+[the CLI reference](docs/modding/CLI_REFERENCE.md#distribution-readiness-checks) for the registry
+format and command behavior. Distribution mode currently accepts only recognized world-data
+JSON/YAML files; translation bundles, assets, and other sidecars are rejected until they have a
+separately reviewable provenance model. Normal authoring `pack` can still include them.
+
 ## CONTRIBUTING
 
 Contributions are welcome. For full guidelines, read [CONTRIBUTING](CONTRIBUTING.md).

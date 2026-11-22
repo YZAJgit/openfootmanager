@@ -83,6 +83,35 @@ The package manifest. Place this in `package.json` (or any file with `"schema": 
 | `defaultActiveRegions` | array of strings | no | `[]` | Region ids that are enabled by default when starting a new game with this package. |
 | `defaultActiveCompetitions` | array of strings | no | `[]` | Competition ids that are enabled by default when starting a new game with this package. |
 | `fallbackLeague` | object or null | no | `null` | Overrides for the league auto-generated when a `database` package declares teams but **no** competitions. See below. |
+| `recordProvenance` | array of objects | no | `[]` | Per-record source, date, provider identity, data kind and declared redistribution status. Older manifests without this field still load; missing matches resolve to `unverified` / `unknown`. Duplicate matches discard evidence and resolve to `unverified`; any `restricted` declaration remains restricted. See [Record provenance](#record-provenance). |
+
+### Record provenance
+
+Each `recordProvenance` entry identifies one package record (or separately addressable part). `entityKind` accepts `world`, `team`, `player`, `staff`, `confederation`, `country`, `competition`, `names`, or `unknown`. `entityId` is the entity's `id`; for `world` it is the package manifest id, and for `names` it is one ISO 3166-1 alpha-2 country code from `NamesDefinition.pools`. Player career-history entries do not have stable IDs yet and cannot be attributed separately. Do not attach metadata to an unaddressable record.
+
+`kind` distinguishes `observed`, `estimated`, `generated`, `simulated`, and `unverified` data. `providerIdentities` contains zero or more `{ "provider", "providerEntityId" }` pairs. `source`, `sourceUrl`, `asOf`, `retrievedAt`, `license`, and `licenseUrl` are optional evidence fields while authoring and loading. Omitted `entityKind`, `entityId`, `kind`, `providerIdentities`, and `distributionStatus` default to `unknown`, `""`, `unverified`, `[]`, and `unknown`; optional evidence fields remain absent. Use `YYYY-MM-DD` for `asOf` and an RFC 3339 UTC timestamp for `retrievedAt`. `ofm-cli release-check` requires these fields for every package record and validates their date and URL formats; ordinary package loading still accepts older manifests.
+
+`distributionStatus` accepts `allowed`, `restricted`, or `unknown`. It records the package author's declaration, not an independent rights decision. A declared `allowed` value remains only a claim until a separately maintained trusted review registry approves the exact package record, provenance fingerprint, and typed record-content fingerprint; URLs and license text alone do not prove permission. `restricted` remains restricted. Do not include data in a distributed package while its rights are unknown or restricted. See the [CLI reference](CLI_REFERENCE.md#distribution-readiness-checks) for the registry schema and trust boundary.
+
+```json
+{
+  "recordProvenance": [
+    {
+      "entityKind": "player",
+      "entityId": "player-17",
+      "kind": "observed",
+      "providerIdentities": [{ "provider": "provider-name", "providerEntityId": "123" }],
+      "source": "Provider page",
+      "sourceUrl": "https://example.test/player/123",
+      "asOf": "2025-05-31",
+      "retrievedAt": "2025-06-01T12:00:00Z",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://example.test/license",
+      "distributionStatus": "unknown"
+    }
+  ]
+}
+```
 
 ### `fallbackLeague` overrides
 

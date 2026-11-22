@@ -386,7 +386,11 @@ pub fn set_training_groups_internal(
 ) -> Result<Game, String> {
     mutate_active_game_for(state, career, |game| {
         let team = user_team_mut(game)?;
-        team.training_groups = groups;
+        // The editor owns the squad groups it knows about, not the individual development plans
+        // it has no screen for (`ofm_core::training_feel`): replacing the list wholesale would
+        // silently delete up to three players' plans.
+        team.training_groups =
+            ofm_core::training_feel::merge_training_groups(&team.training_groups, groups);
 
         Ok(())
     })

@@ -96,6 +96,7 @@ pub mod team_talk_moment;
 #[cfg(test)]
 mod test_support;
 pub mod training;
+pub mod training_feel;
 pub mod transfers;
 pub mod turn;
 pub mod world;

@@ -228,6 +228,13 @@ struct TeamTrainingPlan {
     medical_facility_mult: f64,
     /// player_id → group focus override (players not in any group use default_focus)
     group_overrides: std::collections::HashMap<String, TrainingFocus>,
+    /// player_id → the intensity of the individual development plan he is on, if he is on one
+    /// (`training_feel`). A plan's intensity replaces the club's standing one for that player
+    /// only; everything else about the session, the taper included, is unchanged.
+    individual_intensities: std::collections::HashMap<String, TrainingIntensity>,
+    /// player_id → the focus of his individual development plan. The manager chose it for him
+    /// alone, so it outranks even the focus set on the player's own record.
+    individual_focuses: std::collections::HashMap<String, TrainingFocus>,
     /// Why today's session runs at reduced load, if it does.
     taper: Option<Taper>,
 }
@@ -270,6 +277,22 @@ pub fn process_training(game: &mut Game, weekday_num: u32) {
                     group_overrides.insert(pid.clone(), group.focus.clone());
                 }
             }
+            // Individual plans take precedence even if the group editor reorders groups.
+            let mut individual_intensities = std::collections::HashMap::new();
+            let mut individual_focuses = std::collections::HashMap::new();
+            for group in t
+                .training_groups
+                .iter()
+                .filter(|group| crate::training_feel::is_individual_plan(group))
+            {
+                if let Some(intensity) = group.intensity.clone() {
+                    for pid in &group.player_ids {
+                        group_overrides.insert(pid.clone(), group.focus.clone());
+                        individual_intensities.insert(pid.clone(), intensity.clone());
+                        individual_focuses.insert(pid.clone(), group.focus.clone());
+                    }
+                }
+            }
             (
                 t.id.clone(),
                 TeamTrainingPlan {
@@ -279,6 +302,8 @@ pub fn process_training(game: &mut Game, weekday_num: u32) {
                     bonus,
                     medical_facility_mult,
                     group_overrides,
+                    individual_intensities,
+                    individual_focuses,
                     taper: tapering.get(&t.id).copied(),
                 },
             )
@@ -316,13 +341,20 @@ fn player_training_session(
 ) -> PlayerTrainingSession {
     let is_training_day = plan.schedule.is_training_day(weekday_num);
 
-    // The taper: with a fixture close, today's session runs one step lighter than
-    // the manager's standing setting. The setting itself is untouched — the club's
+    // A player on an individual development plan has an intensity of his own; the rest of the
+    // squad trains at the club's standing one.
+    let standing = plan
+        .individual_intensities
+        .get(&player.id)
+        .unwrap_or(&plan.intensity);
+
+    // The taper: with a fixture close, today's session runs one step lighter than the
+    // manager's standing setting. The setting itself is untouched — the club's
     // stored plan is the manager's, and a taper is not a change of plan.
     let intensity = match plan.taper {
         Some(Taper::Congested) if is_training_day => TrainingIntensity::Low,
-        Some(Taper::NearMatch) if is_training_day => downgrade_intensity(&plan.intensity),
-        _ => plan.intensity.clone(),
+        Some(Taper::NearMatch) if is_training_day => downgrade_intensity(standing),
+        _ => standing.clone(),
     };
     let intensity_mult = match &intensity {
         TrainingIntensity::Low => 0.5,
@@ -349,10 +381,10 @@ fn player_training_session(
         &recovery_focus
     } else {
         // Determine this player's effective focus:
-        // player override > group override > team default
-        player
-            .training_focus
-            .as_ref()
+        // individual plan > player override > group override > team default
+        plan.individual_focuses
+            .get(&player.id)
+            .or(player.training_focus.as_ref())
             .or_else(|| plan.group_overrides.get(&player.id))
             .unwrap_or(&plan.default_focus)
     };
@@ -442,10 +474,12 @@ fn train_player(
     let gap = player.potential.saturating_sub(player.ovr);
     let age_factor = crate::development::training_factor(curve, gap);
 
-    // Base gain per attribute per session, boosted by coaching staff
+    // Base gain per attribute per session, boosted by coaching staff and the player's own drive
+    // (professionalism and ambition, which mentoring can raise).
     let gain = 0.15
         * session.intensity_mult
         * age_factor
+        * crate::character::training_character_factor(&player.character)
         * plan.bonus.coaching_mult
         * plan.bonus.specialization_mult;
 
@@ -674,6 +708,8 @@ mod tests {
             },
             medical_facility_mult: 1.0,
             group_overrides: std::collections::HashMap::new(),
+            individual_intensities: std::collections::HashMap::new(),
+            individual_focuses: std::collections::HashMap::new(),
             taper: None,
         }
     }
@@ -722,6 +758,38 @@ mod tests {
             process_training(game, weekday_num);
             game.clock.current_date += chrono::Duration::days(1);
         }
+    }
+
+    /// Given two otherwise identical players on the same random draws, when one is highly professional and ambitious and the other is not, then the driven one gains more attribute points.
+    #[test]
+    fn professional_ambitious_players_train_faster() {
+        use rand::SeedableRng;
+        let total_after_sessions = |drive: u8| {
+            let mut player = keeper("team1");
+            player.character.professionalism = drive;
+            player.character.ambition = drive;
+            let mut rng = rand::rngs::StdRng::seed_from_u64(11);
+            for _ in 0..300 {
+                train_player(
+                    &mut player,
+                    &plan(TrainingFocus::Technical),
+                    &TrainingDay {
+                        weekday_num: 0,
+                        date: domain::age::season_midpoint(2026),
+                        world_seed: 1,
+                    },
+                    &mut rng,
+                );
+                player.condition = 100;
+                player.potential = 99;
+            }
+            let attrs = attributes(&player);
+            attrs
+                .as_object()
+                .map(|map| map.values().filter_map(|v| v.as_u64()).sum::<u64>())
+                .unwrap_or(0)
+        };
+        assert!(total_after_sessions(95) > total_after_sessions(5));
     }
 
     /// Given a goalkeeper with growth room, when technical training gains succeed, then handling and reflexes improve with passing instead of shooting and dribbling.
@@ -835,6 +903,23 @@ mod tests {
         assert_eq!(player.attributes.strength, 60);
     }
 
+    /// Given a keeper whose own record says Technical but whose club put him on a Defending plan
+    /// When his session is planned
+    /// Then the plan's focus wins over the player-level focus.
+    #[test]
+    fn an_individual_plan_focus_outranks_the_players_own_focus() {
+        let mut player = keeper("team1");
+        player.training_focus = Some(TrainingFocus::Technical);
+        let mut plan = plan(TrainingFocus::Physical);
+        plan.individual_focuses
+            .insert(player.id.clone(), TrainingFocus::Defending);
+
+        session(&mut player, &plan, 0);
+
+        assert_eq!(player.attributes.positioning, 61);
+        assert_eq!(player.attributes.passing, 60);
+    }
+
     /// Given a defending group overriding physical team work, when the keeper trains without an individual override, then group focus controls keeper gains.
     #[test]
     fn a_group_focus_takes_precedence_for_a_goalkeeper() {
@@ -847,6 +932,27 @@ mod tests {
         assert_eq!(player.attributes.reflexes, 54);
         assert_eq!(player.attributes.positioning, 61);
         assert_eq!(player.attributes.passing, 60);
+    }
+
+    /// Given a club standing at Medium and a player on an individual plan at High
+    /// When his session is planned
+    /// Then his own session is High (10 condition, not 6) and a team-mate's stays Medium
+    #[test]
+    fn an_individual_plan_intensity_replaces_the_clubs_standing_intensity() {
+        let planned = keeper("team1");
+        let mut team_mate = keeper("team2");
+        team_mate.id = "team-mate".to_string();
+        let mut plan = plan(TrainingFocus::Technical);
+        plan.individual_intensities
+            .insert(planned.id.clone(), TrainingIntensity::High);
+
+        let own_session = player_training_session(&planned, &plan, 0);
+        let mate_session = player_training_session(&team_mate, &plan, 0);
+
+        assert_eq!(own_session.intensity_mult, 1.5);
+        assert_eq!(own_session.condition_cost, 10);
+        assert_eq!(mate_session.intensity_mult, 1.0);
+        assert_eq!(mate_session.condition_cost, 6);
     }
 
     /// A midfielder born in `birth_year`, rated alike in every attribute, whose ceiling is his rating

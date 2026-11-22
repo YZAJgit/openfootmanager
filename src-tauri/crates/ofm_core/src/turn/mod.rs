@@ -156,6 +156,11 @@ fn run_training_ground(game: &mut Game) {
     let weekday_num = game.clock.current_date.weekday().num_days_from_monday();
     crate::ai_training::apply_ai_training_policies(game, weekday_num);
     training::process_training(game, weekday_num);
+    // A character is a habit, not a session: mentoring moves once a week, on the Monday that
+    // opens it, while attributes move every training day.
+    if weekday_num == 0 {
+        crate::training_feel::process_weekly_mentoring(game);
+    }
     training::check_squad_fitness_warnings(game);
     // Not a session, and deliberately not skipped for the clubs playing today:
     // a league plays whole rounds on one date, so a club whose review day landed

@@ -25,6 +25,7 @@
 //! follows the working set, not the size of the file; anything outside it is reached on demand with
 //! [`materialize_player`] or [`materialize_club_squad`].
 
+mod career_bridge;
 mod importer;
 mod migrations;
 mod queries;
@@ -42,6 +43,10 @@ use ofm_core::world_query::{
     PositionFilter,
 };
 
+pub use career_bridge::{
+    WorkingSetBundle, WorkingSetRequest, load_working_set, materialize_club_squad,
+    materialize_player,
+};
 pub use importer::ImportSummary;
 pub use migrations::{WORLD_MIGRATION_COUNT, world_migrations};
 pub use snapshot::{
@@ -225,5 +230,7 @@ fn prepare(conn: &Connection) -> Result<(), WorldDbError> {
     Ok(())
 }
 
+#[cfg(test)]
+mod career_bridge_tests;
 #[cfg(test)]
 mod tests;

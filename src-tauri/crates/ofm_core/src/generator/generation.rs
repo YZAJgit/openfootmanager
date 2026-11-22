@@ -1038,18 +1038,10 @@ pub(super) fn generate_random_player_from_def(
     let current_year: u32 = opening_year;
 
     let approx_ovr = ovr_from_attributes(&attributes, &position).round() as u32;
-
-    let age_factor = if age <= 23 {
-        1.5
-    } else if age <= 28 {
-        1.2
-    } else if age <= 32 {
-        0.8
-    } else {
-        0.4
-    };
-    let base_value = (approx_ovr as f64).powi(2) * 500.0;
-    let market_value = (base_value * age_factor) as u64;
+    let market_value = crate::player_rating::estimate_market_value(
+        u8::try_from(approx_ovr).unwrap_or(u8::MAX),
+        age,
+    );
     let wage = (market_value / 200).max(crate::contracts::MINIMUM_DEFAULT_WAGE) as u32;
     let contract_years = if age <= 21 {
         rng.random_range(3..6)
@@ -1556,16 +1548,10 @@ pub(super) fn generate_player_from_def(
 
     let approx_ovr =
         crate::player_rating::ovr_from_attributes(&attributes, &def.position).round() as u32;
-    let age_factor = if age <= 23 {
-        1.5
-    } else if age <= 28 {
-        1.2
-    } else if age <= 32 {
-        0.8
-    } else {
-        0.4
-    };
-    let generated_value = ((approx_ovr as f64).powi(2) * 500.0 * age_factor) as u64;
+    let generated_value = crate::player_rating::estimate_market_value(
+        u8::try_from(approx_ovr).unwrap_or(u8::MAX),
+        age,
+    );
     // An authored figure wins. An omitted wage is sized from the value the player
     // ends up with rather than the one the author replaced, and saturates because an
     // authored value can be far larger than any generated one.

@@ -190,6 +190,20 @@ fn shift_each_attribute(attributes: &mut PlayerAttributes, step: i8) -> bool {
     moved
 }
 
+/// Authoritative heuristic market value from position-weighted overall rating and age.
+pub fn estimate_market_value(ovr: u8, age: u32) -> u64 {
+    let age_factor = if age <= 23 {
+        1.5
+    } else if age <= 28 {
+        1.2
+    } else if age <= 32 {
+        0.8
+    } else {
+        0.4
+    };
+    (f64::from(ovr).powi(2) * 500.0 * age_factor) as u64
+}
+
 /// The lines of a formation read strictly: `"4-4-2"` is `[4, 4, 2]` and `"4-1-4-1"` is
 /// `[4, 1, 4, 1]`. Three or four numeric parts, none empty, adding up to the ten outfield
 /// players; anything else is not a formation the game can lay out.

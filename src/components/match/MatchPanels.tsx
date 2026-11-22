@@ -124,18 +124,25 @@ export function MatchStats({ snapshot }: { snapshot: MatchSnapshot }) {
         ct(homeEvents, "PenaltyGoal") +
         ct(homeEvents, "ShotSaved") +
         ct(homeEvents, "ShotOffTarget") +
-        ct(homeEvents, "ShotBlocked"),
+        ct(homeEvents, "ShotBlocked") +
+        ct(homeEvents, "PenaltyMiss"),
       away:
         ct(awayEvents, "Goal") +
         ct(awayEvents, "PenaltyGoal") +
         ct(awayEvents, "ShotSaved") +
         ct(awayEvents, "ShotOffTarget") +
-        ct(awayEvents, "ShotBlocked"),
+        ct(awayEvents, "ShotBlocked") +
+        ct(awayEvents, "PenaltyMiss"),
     },
     {
       label: t("match.shotsOnTarget"),
       home: ct(homeEvents, "Goal") + ct(homeEvents, "PenaltyGoal") + ct(homeEvents, "ShotSaved"),
       away: ct(awayEvents, "Goal") + ct(awayEvents, "PenaltyGoal") + ct(awayEvents, "ShotSaved"),
+    },
+    {
+      label: t("match.expectedGoals"),
+      home: snapshot.home_xg ?? 0,
+      away: snapshot.away_xg ?? 0,
     },
     {
       label: t("match.fouls"),

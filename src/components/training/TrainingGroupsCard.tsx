@@ -42,7 +42,9 @@ export default function TrainingGroupsCard({
 }: TrainingGroupsCardProps) {
   const { t } = useTranslation();
   const positions = usePositionTable();
-  const groups: TrainingGroup[] = team?.training_groups ?? [];
+  const groups: TrainingGroup[] = (team?.training_groups ?? []).filter(
+    (group) => !group.id.startsWith("individual:"),
+  );
   const teamFocus = team?.training_focus || "Physical";
 
   const saveGroups = useCallback(

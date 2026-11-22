@@ -1,6 +1,9 @@
 // The live match as the backend sends it (the engine's snapshot, events and step results).
 // They live in the store, not beside the match screens, so a service can name them too.
 
+import type { PitchFrame2D } from "./generated/PitchFrame2D";
+import type { ShotMapEntry } from "./generated/ShotMapEntry";
+
 export type DangerBand = "Speculative" | "Decent" | "BigChance";
 export type SaveQuality = "Routine" | "Strong" | "WorldClass";
 export type FoulSeverity = "Soft" | "Hard" | "Reckless";
@@ -124,6 +127,10 @@ export interface MatchSnapshot {
   penalty_shootout?: PenaltyShootoutSnapshot | null;
   /** Engine marks out of ten by player id; filled once the match is over. */
   player_ratings?: Record<string, number>;
+  shots?: ShotMapEntry[];
+  home_xg?: number;
+  away_xg?: number;
+  pitch_frame?: PitchFrame2D | null;
 }
 
 export interface MinuteResult {

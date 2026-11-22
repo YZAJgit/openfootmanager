@@ -150,6 +150,30 @@ describe("MatchLive", () => {
   });
   afterEach(() => vi.useRealTimers());
 
+  it("opens the 2D pitch and shot map panel", () => {
+    renderLive({ snapshot: { ...SNAPSHOT, shots: [], home_xg: 0.2, away_xg: 0.1, pitch_frame: null } as unknown as MatchSnapshot });
+    fireEvent.click(screen.getByRole("button", { name: "match.pitch" }));
+    expect(screen.getByRole("img", { name: "match.pitch" })).toBeInTheDocument();
+    expect(screen.getByText("home: 0.20 xG")).toBeInTheDocument();
+  });
+
+  it("counts missed penalties in match shots", () => {
+    const missedPenalty: MatchEvent = {
+      minute: 22,
+      event_type: "PenaltyMiss",
+      side: "Home",
+      zone: "Attack",
+      player_id: "home-player",
+      secondary_player_id: null,
+    };
+    renderLive({ snapshot: { ...SNAPSHOT, events: [missedPenalty] } as unknown as MatchSnapshot });
+    fireEvent.click(screen.getByRole("button", { name: "match.stats" }));
+
+    const shotsRow = screen.getByText("match.shots").parentElement;
+    expect(shotsRow?.children[0]).toHaveTextContent("1");
+    expect(shotsRow?.children[2]).toHaveTextContent("0");
+  });
+
   /**
    * Given a long match with team controls and many key events
    * When the sidebar is rendered

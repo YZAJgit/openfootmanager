@@ -841,8 +841,8 @@
     "deleteTacticConfirm": "Eliminar",
     "resetTactic": "Restablecer valores",
     "tacticBar": "Táctica",
-    "tacticActions": "Acciones de la táctica",
     "pitch": "Campo",
+    "tacticActions": "Acciones de la táctica",
     "saveAsTactic": "Guardar como táctica",
     "updateTactic": "Actualizar táctica",
     "tacticSaved": "Guardado",
@@ -2224,6 +2224,8 @@
     "events": "Eventos",
     "stats": "Estadísticas",
     "lineups": "Alineaciones",
+    "pitch": "Campo",
+    "expectedGoals": "Goles esperados",
     "simSpeed": "Velocidad de Simulación",
     "pause": "Pausa",
     "slow": "Lento",
@@ -2966,6 +2968,9 @@
         "wouldLeaveShort": "Este jugador no puede salir: la plantilla quedaría por debajo del mínimo que un club debe mantener. Línea afectada: {{group}}.",
         "wouldLeaveSeniorsShort": "Este jugador no puede salir: el club se quedaría con menos de {{floor}} jugadores en la primera plantilla, el mínimo que un club debe mantener."
       },
+      "training": {
+        "individual_plan_limit": "Un club puede tener como máximo 3 planes de desarrollo individuales activos a la vez."
+      },
       "noActiveGameSession": "No hay una sesión de juego activa",
       "careerChanged": "La carrera cambió antes de poder guardar esto.",
       "actionAlreadyResolved": "Eso ya se respondió, así que no cambió nada.",
@@ -2982,6 +2987,9 @@
       "roleNotValidForPosition": "Este rol no es válido para la posición del jugador",
       "invalidPlayerRole": "Rol de jugador no válido",
       "playerNotFound": "Jugador no encontrado",
+      "playerNotOnLoan": "Este jugador no está cedido",
+      "notLoanParentClub": "No eres el club propietario de esta cesión",
+      "loanNotRecallable": "Esta cesión no se puede cancelar",
       "invalidSquadRole": "Rol de plantilla no válido",
       "jerseyNumberOutOfRange": "El número de camiseta debe estar entre 1 y 99",
       "jerseyNumberTaken": "Ese número de camiseta ya lo lleva otro jugador de tu plantilla",
@@ -3270,7 +3278,12 @@
       "anotherClubsSquad": "Esa plantilla pertenece a otro club.",
       "startingXiPlayerNotEligible": "Un jugador de esta alineación no puede ser titular en tu club.",
       "startingXiDuplicatePlayer": "Un jugador aparece dos veces en esta alineación.",
-      "startingXiWrongSize": "El once inicial debe tener exactamente once jugadores, o todos los jugadores elegibles si el club tiene menos."
+      "startingXiWrongSize": "El once inicial debe tener exactamente once jugadores, o todos los jugadores elegibles si el club tiene menos.",
+      "youthAcademy": {
+        "notAcademyPlayer": "Este jugador no es de la cantera.",
+        "noScholarshipDecision": "No hay ninguna decisión de beca pendiente para este jugador.",
+        "noMinutesBreach": "El club cedente no ha incumplido la garantía de minutos."
+      }
     },
     "sender": {
       "boardOfDirectors": "Junta Directiva",
@@ -3897,6 +3910,22 @@
       "savedDataSetAside": {
         "subject": "Se apartaron algunos datos guardados",
         "body": "Una parte de esta partida guardada no se pudo leer al cargarla. Se ha apartado en lugar de perderse, y su carrera continúa. Si echa algo en falta, un informe de error ({{settings}} → {{reportBug}}, con la partida adjunta) nos permitirá revisarlo."
+      },
+      "scholarshipDecision": {
+        "subject": "Decisión de beca: {{player}}",
+        "body": "Jefe, {{player}} ha cumplido dieciocho años y su beca termina. Ofrécele un contrato profesional o libéralo antes del {{deadline}}; si no hacemos nada, quedará libre ese día.",
+        "offer": "Ofrecer contrato profesional",
+        "offerDescription": "Pasa al primer equipo con condiciones estándar.",
+        "release": "Liberarlo",
+        "releaseDescription": "Su beca termina y deja el club."
+      },
+      "youthLoanMinutesBreach": {
+        "subject": "Promesa de minutos incumplida: {{player}}",
+        "body": "Jefe, {{player}} ha jugado {{actual}} minutos cedido, pero tenía garantizados {{required}} hasta ahora. Puedes reclamar su regreso."
+      },
+      "youthCompensation": {
+        "subject": "Compensación por formación: {{player}}",
+        "body": "Jefe, {{toTeam}} se llevó a {{player}} de nuestra cantera y nos pagó {{fee}} en compensación por formación."
       }
     },
     "news": {
@@ -4082,6 +4111,22 @@
         "repeatedNamePool": "El grupo de nombres de {{country}} ya se dio en {{first}}; el de este archivo lo sustituye. Deja solo uno, o asígnalos a países distintos.",
         "patchClubRefsUnverified": "Este parche nombra clubes que no define. Solo, no puede distinguir los clubes de su base de datos de los errores, así que no se comprobaron aquí. El juego los comprueba cuando el parche se apila sobre su base.",
         "namePoolIncomplete": "El grupo de nombres de {{country}} tiene nombres pero no apellidos, o apellidos pero no nombres, así que no se usa: los jugadores de {{country}} reciben los nombres del juego. Dale ambos."
+      }
+    },
+    "digest": {
+      "cause": {
+        "individual_plan": "Plan individual ({{focus}}): {{sessions}} sesiones en {{weeks}} semanas",
+        "mentor": "Un mentor trabajó con él durante {{weeks}} semanas",
+        "match_minutes": "{{minutes}} minutos de partido",
+        "training_load": "{{sessions}} sesiones de entrenamiento en {{weeks}} semanas",
+        "idle": "Ni entrenó ni jugó en {{weeks}} semanas"
+      },
+      "effect": {
+        "rating_gain": "Valoración al alza ({{change}})",
+        "rating_loss": "Valoración a la baja ({{change}})",
+        "rating_held": "La valoración se mantuvo",
+        "character_shift": "Su carácter se acercó al de su mentor",
+        "stalled": "Nada se movió"
       }
     }
   },

@@ -1292,6 +1292,7 @@ mod tests {
                 path.display()
             )
         });
+        let on_disk = on_disk.replace("\r\n", "\n");
         assert_eq!(
             on_disk.trim(),
             rendered.trim(),

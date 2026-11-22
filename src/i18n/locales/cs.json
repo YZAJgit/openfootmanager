@@ -793,8 +793,8 @@
     "deleteTacticConfirm": "Smazat",
     "resetTactic": "Obnovit výchozí",
     "tacticBar": "Taktika",
-    "tacticActions": "Akce taktiky",
     "pitch": "Hřiště",
+    "tacticActions": "Akce taktiky",
     "saveAsTactic": "Uložit jako taktiku",
     "updateTactic": "Aktualizovat taktiku",
     "tacticSaved": "Uloženo",
@@ -2224,6 +2224,8 @@
     "events": "Události",
     "stats": "Statistiky",
     "lineups": "Sestavy",
+    "pitch": "Hřiště",
+    "expectedGoals": "Očekávané góly",
     "simSpeed": "Rychlost simulace",
     "pause": "Pauza",
     "slow": "Pomalá",
@@ -2966,6 +2968,9 @@
         "wouldLeaveShort": "Tento hráč nemůže odejít: kádr by klesl pod minimum, které musí klub udržet. Dotčená řada: {{group}}.",
         "wouldLeaveSeniorsShort": "Tento hráč nemůže odejít: klubu by v A-týmu zůstalo méně než {{floor}} hráčů, což je minimum, které musí klub udržet."
       },
+      "training": {
+        "individual_plan_limit": "Klub může mít současně nejvýše 3 individuální rozvojové plány."
+      },
       "noActiveGameSession": "Žádná aktivní herní relace",
       "careerChanged": "Kariéra se změnila dříve, než to bylo možné uložit.",
       "actionAlreadyResolved": "Na to už bylo odpovězeno, takže se nic nezměnilo.",
@@ -3017,6 +3022,9 @@
       "roleNotValidForPosition": "Tato role není platná pro pozici hráče",
       "invalidPlayerRole": "Neplatná role hráče",
       "playerNotFound": "Hráč nebyl nalezen",
+      "playerNotOnLoan": "Tento hráč není na hostování",
+      "notLoanParentClub": "Nejste mateřským klubem tohoto hostování",
+      "loanNotRecallable": "Toto hostování nelze odvolat",
       "invalidSquadRole": "Neplatná role v kádru",
       "jerseyNumberOutOfRange": "Číslo dresu musí být mezi 1 a 99",
       "jerseyNumberTaken": "Toto číslo dresu již má jiný hráč ve vašem kádru",
@@ -3270,7 +3278,12 @@
       "anotherClubsSquad": "Tento kádr patří jinému klubu.",
       "startingXiPlayerNotEligible": "Hráč v této sestavě nemůže nastoupit v základu tvého klubu.",
       "startingXiDuplicatePlayer": "Jeden hráč je v této sestavě dvakrát.",
-      "startingXiWrongSize": "Základní sestava musí mít přesně jedenáct hráčů, nebo všechny způsobilé hráče, pokud jich klub má méně."
+      "startingXiWrongSize": "Základní sestava musí mít přesně jedenáct hráčů, nebo všechny způsobilé hráče, pokud jich klub má méně.",
+      "youthAcademy": {
+        "notAcademyPlayer": "Tento hráč není z akademie.",
+        "noScholarshipDecision": "U tohoto hráče není třeba rozhodovat o stipendiu.",
+        "noMinutesBreach": "Hostující klub neporušil záruku minut."
+      }
     },
     "sender": {
       "boardOfDirectors": "Představenstvo",
@@ -3897,6 +3910,22 @@
       "savedDataSetAside": {
         "subject": "Některá uložená data byla odložena stranou",
         "body": "Část této uložené hry se při načítání nepodařilo přečíst. Byla odložena stranou, nikoli ztracena, a vaše kariéra pokračuje. Pokud vám něco chybí, hlášení chyby ({{settings}} → {{reportBug}}, s přiloženou uloženou hrou) nám umožní se na to podívat."
+      },
+      "scholarshipDecision": {
+        "subject": "Rozhodnutí o stipendiu: {{player}}",
+        "body": "Šéfe, {{player}} oslavil osmnácté narozeniny a jeho stipendium končí. Nabídněte mu profesionální smlouvu, nebo ho propusťte do {{deadline}}; pokud nic neuděláme, bude toho dne propuštěn.",
+        "offer": "Nabídnout profesionální smlouvu",
+        "offerDescription": "Přejde do prvního týmu za standardních podmínek.",
+        "release": "Propustit ho",
+        "releaseDescription": "Jeho stipendium skončí a opustí klub."
+      },
+      "youthLoanMinutesBreach": {
+        "subject": "Slib minut porušen: {{player}}",
+        "body": "Šéfe, {{player}} odehrál na hostování {{actual}} minut, ale dosud mu bylo zaručeno {{required}}. Můžete ho odvolat."
+      },
+      "youthCompensation": {
+        "subject": "Odměna za výchovu: {{player}}",
+        "body": "Šéfe, {{toTeam}} si odvedl hráče {{player}} z naší akademie a zaplatil nám {{fee}} jako odměnu za výchovu."
       }
     },
     "news": {
@@ -4082,6 +4111,22 @@
         "repeatedNamePool": "Sada jmen pro {{country}} už byla uvedena v {{first}}; sada v tomto souboru ji nahrazuje. Ponechte jen jednu, nebo je přiřaďte různým zemím.",
         "patchClubRefsUnverified": "Tento patch uvádí kluby, které sám nedefinuje. Samotný nedokáže rozlišit kluby své základní databáze od chyb, proto se zde nekontrolovaly. Hra je zkontroluje, když se patch naskládá na svou základnu.",
         "namePoolIncomplete": "Sada jmen pro {{country}} má křestní jména, ale ne příjmení, nebo příjmení, ale ne křestní jména, a proto se nepoužije: hráči z {{country}} dostanou jména ze hry. Uveďte obojí."
+      }
+    },
+    "digest": {
+      "cause": {
+        "individual_plan": "Individuální plán ({{focus}}): {{sessions}} tréninků za {{weeks}} týdnů",
+        "mentor": "Mentor s ním pracoval {{weeks}} týdnů",
+        "match_minutes": "{{minutes}} minut v zápasech",
+        "training_load": "{{sessions}} tréninků za {{weeks}} týdnů",
+        "idle": "Za {{weeks}} týdnů netrénoval ani nehrál"
+      },
+      "effect": {
+        "rating_gain": "Hodnocení vzrostlo ({{change}})",
+        "rating_loss": "Hodnocení kleslo ({{change}})",
+        "rating_held": "Hodnocení se nezměnilo",
+        "character_shift": "Povahou se přiblížil svému mentorovi",
+        "stalled": "Nic se nezměnilo"
       }
     }
   },

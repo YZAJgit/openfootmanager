@@ -841,8 +841,8 @@
     "deleteTacticConfirm": "删除",
     "resetTactic": "恢复默认",
     "tacticBar": "战术",
-    "tacticActions": "战术操作",
     "pitch": "球场",
+    "tacticActions": "战术操作",
     "saveAsTactic": "保存为战术",
     "updateTactic": "更新战术",
     "tacticSaved": "已保存",
@@ -2224,6 +2224,8 @@
     "events": "事件",
     "stats": "数据",
     "lineups": "首发名单",
+    "pitch": "球场",
+    "expectedGoals": "预期进球",
     "simSpeed": "模拟速度",
     "pause": "暂停",
     "slow": "慢速",
@@ -2966,6 +2968,9 @@
         "wouldLeaveShort": "该球员无法离队：阵容将低于俱乐部必须保留的最低人数。涉及位置：{{group}}。",
         "wouldLeaveSeniorsShort": "该球员无法离队：俱乐部一线队将少于 {{floor}} 名球员，低于俱乐部必须保留的最低人数。"
       },
+      "training": {
+        "individual_plan_limit": "一家俱乐部最多只能同时执行 3 个个人发展计划。"
+      },
       "noActiveGameSession": "当前没有活动中的游戏会话",
       "careerChanged": "在保存之前，生涯已经切换。",
       "actionAlreadyResolved": "这已经回复过了，所以没有任何变化。",
@@ -2982,6 +2987,9 @@
       "roleNotValidForPosition": "该角色对球员的位置无效",
       "invalidPlayerRole": "无效的球员角色",
       "playerNotFound": "未找到球员",
+      "playerNotOnLoan": "该球员不在租借中",
+      "notLoanParentClub": "你不是这笔租借的所属俱乐部",
+      "loanNotRecallable": "这笔租借无法召回",
       "invalidSquadRole": "无效的阵容角色",
       "jerseyNumberOutOfRange": "球衣号码必须在 1 到 99 之间",
       "jerseyNumberTaken": "该球衣号码已被阵容中的另一名球员使用",
@@ -3270,7 +3278,12 @@
       "anotherClubsSquad": "该阵容属于另一家俱乐部。",
       "startingXiPlayerNotEligible": "此阵容中有球员无法为你的俱乐部首发。",
       "startingXiDuplicatePlayer": "此阵容中同一名球员出现了两次。",
-      "startingXiWrongSize": "首发阵容必须正好有十一名球员；如果俱乐部球员不足，则为所有可出场球员。"
+      "startingXiWrongSize": "首发阵容必须正好有十一名球员；如果俱乐部球员不足，则为所有可出场球员。",
+      "youthAcademy": {
+        "notAcademyPlayer": "该球员不是青训球员。",
+        "noScholarshipDecision": "该球员没有待处理的奖学金决定。",
+        "noMinutesBreach": "租借俱乐部没有违反出场时间保证。"
+      }
     },
     "sender": {
       "boardOfDirectors": "董事会",
@@ -3897,6 +3910,22 @@
       "savedDataSetAside": {
         "subject": "部分存档数据已被单独保留",
         "body": "加载时，此存档的一部分无法读取。这部分数据已被单独保留而没有丢失，您的生涯将继续进行。如果发现有内容缺失，请提交错误报告（{{settings}} → {{reportBug}}，并附上存档），以便我们查看。"
+      },
+      "scholarshipDecision": {
+        "subject": "奖学金决定：{{player}}",
+        "body": "老板，{{player}}已满十八岁，奖学金即将结束。请在{{deadline}}前向他提供职业合同或将其释放；若不处理，他将在当天被释放。",
+        "offer": "提供职业合同",
+        "offerDescription": "他将以标准条款加入一线队。",
+        "release": "释放他",
+        "releaseDescription": "他的奖学金结束并离开俱乐部。"
+      },
+      "youthLoanMinutesBreach": {
+        "subject": "出场时间承诺未兑现：{{player}}",
+        "body": "老板，{{player}}租借期间仅出场{{actual}}分钟，而截至目前保证的出场时间为{{required}}分钟。你可以将他召回。"
+      },
+      "youthCompensation": {
+        "subject": "培训补偿：{{player}}",
+        "body": "老板，{{toTeam}}从我们的青训营带走了{{player}}，并支付了{{fee}}的培训补偿。"
       }
     },
     "news": {
@@ -4082,6 +4111,22 @@
         "repeatedNamePool": "{{country}} 的姓名库已在 {{first}} 中给出；本文件中的姓名库会将其替换。请只保留一个，或将它们分配给不同的国家。",
         "patchClubRefsUnverified": "此补丁提到了它自己未定义的俱乐部。单独检查时无法区分其基础数据库中的俱乐部与错误，因此这里没有检查它们。当补丁叠加到其基础包上时，游戏会检查它们。",
         "namePoolIncomplete": "{{country}} 的姓名库只有名字没有姓氏，或只有姓氏没有名字，因此不会被使用：来自 {{country}} 的球员会使用游戏自带的名字。请同时提供两者。"
+      }
+    },
+    "digest": {
+      "cause": {
+        "individual_plan": "个人计划（{{focus}}）：{{weeks}}周内{{sessions}}次训练",
+        "mentor": "导师指导了他{{weeks}}周",
+        "match_minutes": "{{minutes}}分钟比赛时间",
+        "training_load": "{{weeks}}周内{{sessions}}次训练",
+        "idle": "{{weeks}}周内既没训练也没比赛"
+      },
+      "effect": {
+        "rating_gain": "评分上升（{{change}}）",
+        "rating_loss": "评分下降（{{change}}）",
+        "rating_held": "评分保持不变",
+        "character_shift": "性格向导师靠拢",
+        "stalled": "没有任何变化"
       }
     }
   },

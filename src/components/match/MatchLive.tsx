@@ -18,6 +18,7 @@ import { getEventDisplay, getPlayerName, makeTeamFallback, phaseLabel } from "./
 import { TeamLogo } from "../ui";
 import { useSettingsStore } from "../../store/settingsStore";
 import { EventFeed, MatchStats, Lineups } from "./MatchPanels";
+import MatchPitch2D from "./MatchPitch2D";
 import MatchScreenLayout from "./MatchScreenLayout";
 import { SubPanel } from "./SubPanel";
 import { applyRoleChange } from "./applyRoleChange";
@@ -39,7 +40,7 @@ import {
 } from "lucide-react";
 import { invokeForCareer } from "../../services/careerInvoke";
 
-type ActivePanel = "events" | "stats" | "lineups";
+type ActivePanel = "events" | "stats" | "lineups" | "pitch";
 
 interface MatchLiveProps {
   snapshot: MatchSnapshot;
@@ -409,6 +410,11 @@ export default function MatchLive({
                 label: t("match.lineups"),
                 icon: <Users className="w-4 h-4" />,
               },
+              {
+                id: "pitch" as ActivePanel,
+                label: t("match.pitch"),
+                icon: <Target className="w-4 h-4" />,
+              },
             ].map((tab) => (
               <button
                 type="button"
@@ -450,6 +456,16 @@ export default function MatchLive({
             )}
             {activePanel === "stats" && <MatchStats snapshot={snapshot} />}
             {activePanel === "lineups" && <Lineups snapshot={snapshot} />}
+            {activePanel === "pitch" && (
+              <MatchPitch2D
+                frame={snapshot.pitch_frame ?? null}
+                shots={snapshot.shots ?? []}
+                homeXg={snapshot.home_xg ?? 0}
+                awayXg={snapshot.away_xg ?? 0}
+                homeName={homeTeam.name}
+                awayName={awayTeam.name}
+              />
+            )}
           </section>
         </div>
 

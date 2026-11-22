@@ -793,8 +793,8 @@
     "deleteTacticConfirm": "Delete",
     "resetTactic": "Reset to defaults",
     "tacticBar": "Tactic",
-    "tacticActions": "Tactic actions",
     "pitch": "Pitch",
+    "tacticActions": "Tactic actions",
     "saveAsTactic": "Save as tactic",
     "updateTactic": "Update tactic",
     "tacticSaved": "Saved",
@@ -2224,6 +2224,8 @@
     "events": "Events",
     "stats": "Stats",
     "lineups": "Lineups",
+    "pitch": "Pitch",
+    "expectedGoals": "Expected goals",
     "simSpeed": "Simulation Speed",
     "pause": "Pause",
     "slow": "Slow",
@@ -2966,6 +2968,9 @@
         "wouldLeaveShort": "This player cannot leave: the squad would fall below the minimum a club must keep. Position group affected: {{group}}.",
         "wouldLeaveSeniorsShort": "This player cannot leave: the club would be left with fewer than {{floor}} senior players, the minimum a club must keep."
       },
+      "training": {
+        "individual_plan_limit": "A club can run at most 3 individual development plans at once."
+      },
       "noActiveGameSession": "No active game session",
       "careerChanged": "The career changed before this could be saved.",
       "actionAlreadyResolved": "That was already answered, so nothing changed.",
@@ -3017,6 +3022,9 @@
       "roleNotValidForPosition": "This role is not valid for the player's position",
       "invalidPlayerRole": "Invalid player role",
       "playerNotFound": "Player not found",
+      "playerNotOnLoan": "This player is not on loan",
+      "notLoanParentClub": "You are not the parent club of this loan",
+      "loanNotRecallable": "This loan cannot be recalled",
       "invalidSquadRole": "Invalid squad role",
       "jerseyNumberOutOfRange": "Jersey number must be between 1 and 99",
       "jerseyNumberTaken": "That jersey number is already taken by another player in your squad",
@@ -3270,7 +3278,12 @@
       "anotherClubsSquad": "That squad belongs to another club.",
       "startingXiPlayerNotEligible": "A player in this lineup is not eligible to start for your club.",
       "startingXiDuplicatePlayer": "A player appears twice in this lineup.",
-      "startingXiWrongSize": "The starting eleven must have exactly eleven players, or every eligible player if the club has fewer."
+      "startingXiWrongSize": "The starting eleven must have exactly eleven players, or every eligible player if the club has fewer.",
+      "youthAcademy": {
+        "notAcademyPlayer": "This player is not an academy player.",
+        "noScholarshipDecision": "There is no scholarship decision to make for this player.",
+        "noMinutesBreach": "The loan club has not broken its minutes guarantee."
+      }
     },
     "sender": {
       "boardOfDirectors": "Board of Directors",
@@ -3897,6 +3910,22 @@
       "savedDataSetAside": {
         "subject": "Some saved data was set aside",
         "body": "Part of this save couldn't be read when it loaded. It has been set aside rather than lost, and your career carries on. If something looks missing, a bug report ({{settings}} → {{reportBug}}, with the save attached) lets us look at it."
+      },
+      "scholarshipDecision": {
+        "subject": "Scholarship decision: {{player}}",
+        "body": "Boss, {{player}} has turned eighteen and his scholarship ends. Offer him a professional contract or release him by {{deadline}}; if we do nothing, he is released that day.",
+        "offer": "Offer a professional contract",
+        "offerDescription": "He joins the first team on standard terms.",
+        "release": "Release him",
+        "releaseDescription": "His scholarship ends and he leaves the club."
+      },
+      "youthLoanMinutesBreach": {
+        "subject": "Loan minutes promise broken: {{player}}",
+        "body": "Boss, {{player}} has played {{actual}} minutes on loan but was guaranteed {{required}} so far. You may recall him."
+      },
+      "youthCompensation": {
+        "subject": "Training compensation: {{player}}",
+        "body": "Boss, {{toTeam}} took {{player}} from our academy and paid us {{fee}} in training compensation."
       }
     },
     "news": {
@@ -4082,6 +4111,22 @@
         "repeatedNamePool": "The name pool for {{country}} was already given in {{first}}; this file's pool replaces it. Keep one of them, or give them different countries.",
         "patchClubRefsUnverified": "This patch names clubs it does not define. Alone, it cannot tell the clubs of its base database from mistakes, so they were not checked here. The game checks them when the patch is stacked on its base.",
         "namePoolIncomplete": "The name pool for {{country}} has first names but no surnames, or surnames but no first names, so it is not used: players from {{country}} get the game's own names. Give it both."
+      }
+    },
+    "digest": {
+      "cause": {
+        "individual_plan": "Individual plan ({{focus}}): {{sessions}} sessions over {{weeks}} weeks",
+        "mentor": "A mentor worked with him for {{weeks}} weeks",
+        "match_minutes": "{{minutes}} match minutes",
+        "training_load": "{{sessions}} training sessions over {{weeks}} weeks",
+        "idle": "Neither trained nor played in {{weeks}} weeks"
+      },
+      "effect": {
+        "rating_gain": "Rating up ({{change}})",
+        "rating_loss": "Rating down ({{change}})",
+        "rating_held": "Rating held steady",
+        "character_shift": "Character moved toward his mentor's",
+        "stalled": "Nothing moved"
       }
     }
   },

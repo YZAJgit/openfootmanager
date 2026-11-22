@@ -190,6 +190,29 @@ describe("TrainingGroupsCard", () => {
     expect(screen.getByText("No groups")).toBeInTheDocument();
   });
 
+  // Given a club running an individual development plan
+  // When the group editor renders
+  // Then the plan is not offered as an editable squad group.
+  it("hides individual development plans from the group editor", () => {
+    render(
+      <TrainingGroupsCard
+        team={createTeam({
+          training_groups: [
+            { id: "individual:player-1", name: "John Smith", focus: "Technical", player_ids: ["player-1"] },
+          ],
+        })}
+        onGameUpdate={vi.fn()}
+        roster={[createPlayer()]}
+        isSaving={false}
+        setIsSaving={vi.fn()}
+        trainingFocusIds={["Physical", "Technical", "Recovery"]}
+        trainingFocusIcons={{}}
+      />,
+    );
+
+    expect(screen.getByText("No groups")).toBeInTheDocument();
+  });
+
   it("adds a training group and forwards the updated game state", async () => {
     const updatedState = createGameState(
       createTeam({

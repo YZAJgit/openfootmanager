@@ -793,8 +793,8 @@
     "deleteTacticConfirm": "Sil",
     "resetTactic": "Varsayılana sıfırla",
     "tacticBar": "Taktik",
-    "tacticActions": "Taktik işlemleri",
     "pitch": "Saha",
+    "tacticActions": "Taktik işlemleri",
     "saveAsTactic": "Taktik olarak kaydet",
     "updateTactic": "Taktiği güncelle",
     "tacticSaved": "Kaydedildi",
@@ -2224,6 +2224,8 @@
     "events": "Olaylar",
     "stats": "İstatistikler",
     "lineups": "Dizilişler",
+    "pitch": "Saha",
+    "expectedGoals": "Beklenen gol",
     "simSpeed": "Simülasyon Hızı",
     "pause": "Duraklat",
     "slow": "Yavaş",
@@ -2966,6 +2968,9 @@
         "wouldLeaveShort": "Bu oyuncu ayrılamaz: kadro, bir kulübün koruması gereken asgari sayının altına düşer. Etkilenen bölge: {{group}}.",
         "wouldLeaveSeniorsShort": "Bu oyuncu ayrılamaz: kulübün A takımında {{floor}} oyuncudan az kalır, bu da bir kulübün koruması gereken asgari sayıdır."
       },
+      "training": {
+        "individual_plan_limit": "Bir kulüp aynı anda en fazla 3 bireysel gelişim planı yürütebilir."
+      },
       "noActiveGameSession": "Aktif oyun oturumu yok",
       "careerChanged": "Bu kaydedilemeden önce kariyer değişti.",
       "actionAlreadyResolved": "Buna zaten yanıt verildi, bu yüzden hiçbir şey değişmedi.",
@@ -3017,6 +3022,9 @@
       "roleNotValidForPosition": "Bu rol, oyuncunun pozisyonu için geçerli değil",
       "invalidPlayerRole": "Geçersiz oyuncu rolü",
       "playerNotFound": "Oyuncu bulunamadı",
+      "playerNotOnLoan": "Bu oyuncu kiralık değil",
+      "notLoanParentClub": "Bu kiralığın sahibi kulüp siz değilsiniz",
+      "loanNotRecallable": "Bu kiralık geri çağrılamaz",
       "invalidSquadRole": "Geçersiz kadro rolü",
       "jerseyNumberOutOfRange": "Forma numarası 1 ile 99 arasında olmalıdır",
       "jerseyNumberTaken": "Bu forma numarası kadronuzdaki başka bir oyuncu tarafından kullanılıyor",
@@ -3270,7 +3278,12 @@
       "anotherClubsSquad": "Bu kadro başka bir kulübe ait.",
       "startingXiPlayerNotEligible": "Bu diziliştaki bir oyuncu kulübünde ilk 11'de yer alamaz.",
       "startingXiDuplicatePlayer": "Bir oyuncu bu dizilişte iki kez yer alıyor.",
-      "startingXiWrongSize": "İlk 11 tam olarak on bir oyuncudan oluşmalıdır; kulübün oyuncusu daha azsa uygun tüm oyuncular."
+      "startingXiWrongSize": "İlk 11 tam olarak on bir oyuncudan oluşmalıdır; kulübün oyuncusu daha azsa uygun tüm oyuncular.",
+      "youthAcademy": {
+        "notAcademyPlayer": "Bu oyuncu akademi oyuncusu değil.",
+        "noScholarshipDecision": "Bu oyuncu için verilecek bir burs kararı yok.",
+        "noMinutesBreach": "Kiralayan kulüp süre garantisini ihlal etmedi."
+      }
     },
     "sender": {
       "boardOfDirectors": "Yönetim Kurulu",
@@ -3897,6 +3910,22 @@
       "savedDataSetAside": {
         "subject": "Bazı kayıtlı veriler bir kenara ayrıldı",
         "body": "Bu kaydın bir kısmı yüklenirken okunamadı. Kaybolmak yerine bir kenara ayrıldı ve kariyeriniz devam ediyor. Eksik bir şey görürseniz, kaydın eklendiği bir hata raporu ({{settings}} → {{reportBug}}) incelememizi sağlar."
+      },
+      "scholarshipDecision": {
+        "subject": "Burs kararı: {{player}}",
+        "body": "Patron, {{player}} on sekiz yaşına girdi ve bursu sona eriyor. {{deadline}} tarihine kadar ona profesyonel sözleşme teklif et ya da serbest bırak; bir şey yapmazsak o gün serbest bırakılır.",
+        "offer": "Profesyonel sözleşme teklif et",
+        "offerDescription": "Standart şartlarla ilk takıma geçer.",
+        "release": "Serbest bırak",
+        "releaseDescription": "Bursu sona erer ve kulüpten ayrılır."
+      },
+      "youthLoanMinutesBreach": {
+        "subject": "Süre sözü tutulmadı: {{player}}",
+        "body": "Patron, {{player}} kiralıkta {{actual}} dakika oynadı, oysa şimdiye kadar {{required}} dakika garanti edilmişti. Onu geri çağırabilirsin."
+      },
+      "youthCompensation": {
+        "subject": "Eğitim tazminatı: {{player}}",
+        "body": "Patron, {{toTeam}} {{player}} oyuncusunu akademimizden aldı ve bize {{fee}} eğitim tazminatı ödedi."
       }
     },
     "news": {
@@ -4082,6 +4111,22 @@
         "repeatedNamePool": "{{country}} için isim havuzu daha önce {{first}} dosyasında verilmişti; bu dosyadaki havuz onun yerine geçer. Yalnızca birini bırakın ya da farklı ülkelere atayın.",
         "patchClubRefsUnverified": "Bu yama, kendisinin tanımlamadığı kulüplerden söz ediyor. Tek başına, temel veri tabanındaki kulüpleri hatalardan ayıramaz; bu yüzden burada denetlenmediler. Oyun, yama temeline yığıldığında bunları denetler.",
         "namePoolIncomplete": "{{country}} için isim havuzunda ad var ama soyadı yok ya da soyadı var ama ad yok, bu yüzden kullanılmıyor: {{country}} oyuncuları oyunun kendi isimlerini alır. İkisini de girin."
+      }
+    },
+    "digest": {
+      "cause": {
+        "individual_plan": "Bireysel plan ({{focus}}): {{weeks}} haftada {{sessions}} antrenman",
+        "mentor": "Bir mentor {{weeks}} hafta boyunca onunla çalıştı",
+        "match_minutes": "{{minutes}} maç dakikası",
+        "training_load": "{{weeks}} haftada {{sessions}} antrenman",
+        "idle": "{{weeks}} haftadır ne antrenman yaptı ne de oynadı"
+      },
+      "effect": {
+        "rating_gain": "Reyting yükseldi ({{change}})",
+        "rating_loss": "Reyting düştü ({{change}})",
+        "rating_held": "Reyting sabit kaldı",
+        "character_shift": "Karakteri mentorununkine yaklaştı",
+        "stalled": "Hiçbir şey değişmedi"
       }
     }
   },

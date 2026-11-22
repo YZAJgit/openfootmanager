@@ -841,8 +841,8 @@
     "deleteTacticConfirm": "Löschen",
     "resetTactic": "Auf Standard zurücksetzen",
     "tacticBar": "Taktik",
-    "tacticActions": "Taktik-Aktionen",
     "pitch": "Spielfeld",
+    "tacticActions": "Taktik-Aktionen",
     "saveAsTactic": "Als Taktik speichern",
     "updateTactic": "Taktik aktualisieren",
     "tacticSaved": "Gespeichert",
@@ -2224,6 +2224,8 @@
     "events": "Ereignisse",
     "stats": "Statistiken",
     "lineups": "Aufstellungen",
+    "pitch": "Spielfeld",
+    "expectedGoals": "Erwartete Tore",
     "simSpeed": "Simulationsgeschwindigkeit",
     "pause": "Pause",
     "slow": "Langsam",
@@ -2966,6 +2968,9 @@
         "wouldLeaveShort": "Dieser Spieler kann nicht gehen: Der Kader würde unter das Minimum fallen, das ein Verein halten muss. Betroffener Mannschaftsteil: {{group}}.",
         "wouldLeaveSeniorsShort": "Dieser Spieler kann nicht gehen: Der Verein hätte dann weniger als {{floor}} Spieler im Profikader, das Minimum, das ein Verein halten muss."
       },
+      "training": {
+        "individual_plan_limit": "Ein Verein kann höchstens 3 individuelle Entwicklungspläne gleichzeitig führen."
+      },
       "noActiveGameSession": "Keine aktive Spielsitzung",
       "careerChanged": "Die Karriere hat gewechselt, bevor dies gespeichert werden konnte.",
       "actionAlreadyResolved": "Darauf wurde bereits geantwortet, daher hat sich nichts geändert.",
@@ -2982,6 +2987,9 @@
       "roleNotValidForPosition": "Diese Rolle ist für die Position des Spielers nicht gültig",
       "invalidPlayerRole": "Ungültige Spielerrolle",
       "playerNotFound": "Spieler nicht gefunden",
+      "playerNotOnLoan": "Dieser Spieler ist nicht verliehen",
+      "notLoanParentClub": "Dein Verein ist nicht der Stammverein dieser Leihe",
+      "loanNotRecallable": "Diese Leihe kann nicht zurückgerufen werden",
       "invalidSquadRole": "Ungültige Kaderrolle",
       "jerseyNumberOutOfRange": "Die Trikotnummer muss zwischen 1 und 99 liegen",
       "jerseyNumberTaken": "Diese Trikotnummer wird bereits von einem anderen Spieler in deinem Kader getragen",
@@ -3270,7 +3278,12 @@
       "anotherClubsSquad": "Dieser Kader gehört zu einem anderen Verein.",
       "startingXiPlayerNotEligible": "Ein Spieler in dieser Aufstellung darf für deinen Verein nicht starten.",
       "startingXiDuplicatePlayer": "Ein Spieler kommt in dieser Aufstellung zweimal vor.",
-      "startingXiWrongSize": "Die Startelf muss genau elf Spieler haben, oder alle spielberechtigten Spieler, wenn der Verein weniger hat."
+      "startingXiWrongSize": "Die Startelf muss genau elf Spieler haben, oder alle spielberechtigten Spieler, wenn der Verein weniger hat.",
+      "youthAcademy": {
+        "notAcademyPlayer": "Dieser Spieler gehört nicht zur Akademie.",
+        "noScholarshipDecision": "Für diesen Spieler steht keine Stipendiumsentscheidung an.",
+        "noMinutesBreach": "Der Leihverein hat die Einsatzzeit-Garantie nicht verletzt."
+      }
     },
     "sender": {
       "boardOfDirectors": "Vorstand",
@@ -3897,6 +3910,22 @@
       "savedDataSetAside": {
         "subject": "Einige gespeicherte Daten wurden beiseitegelegt",
         "body": "Ein Teil dieses Spielstands konnte beim Laden nicht gelesen werden. Er wurde beiseitegelegt statt verloren, und Ihre Karriere geht weiter. Falls etwas fehlt, hilft uns ein Fehlerbericht ({{settings}} → {{reportBug}}, mit angehängtem Spielstand), der Sache nachzugehen."
+      },
+      "scholarshipDecision": {
+        "subject": "Stipendiumsentscheidung: {{player}}",
+        "body": "Chef, {{player}} ist achtzehn geworden und sein Stipendium läuft aus. Biete ihm bis zum {{deadline}} einen Profivertrag an oder gib ihn frei; tun wir nichts, wird er an diesem Tag freigegeben.",
+        "offer": "Profivertrag anbieten",
+        "offerDescription": "Er rückt zu Standardbedingungen in die erste Mannschaft auf.",
+        "release": "Freigeben",
+        "releaseDescription": "Sein Stipendium endet und er verlässt den Verein."
+      },
+      "youthLoanMinutesBreach": {
+        "subject": "Einsatzzeit-Zusage verletzt: {{player}}",
+        "body": "Chef, {{player}} hat in der Leihe {{actual}} Minuten gespielt, bisher waren ihm {{required}} garantiert. Du kannst ihn zurückholen."
+      },
+      "youthCompensation": {
+        "subject": "Ausbildungsentschädigung: {{player}}",
+        "body": "Chef, {{toTeam}} hat {{player}} aus unserer Akademie geholt und uns {{fee}} Ausbildungsentschädigung gezahlt."
       }
     },
     "news": {
@@ -4082,6 +4111,22 @@
         "repeatedNamePool": "Der Namenspool für {{country}} wurde bereits in {{first}} angegeben; der Pool dieser Datei ersetzt ihn. Behalte nur einen oder ordne sie verschiedenen Ländern zu.",
         "patchClubRefsUnverified": "Dieser Patch nennt Vereine, die er nicht definiert. Allein kann er die Vereine seiner Basisdatenbank nicht von Fehlern unterscheiden, daher wurden sie hier nicht geprüft. Das Spiel prüft sie, wenn der Patch auf seine Basis gestapelt wird.",
         "namePoolIncomplete": "Der Namenspool für {{country}} hat Vornamen, aber keine Nachnamen, oder Nachnamen, aber keine Vornamen, und wird daher nicht verwendet: Spieler aus {{country}} erhalten die Namen des Spiels. Gib ihm beides."
+      }
+    },
+    "digest": {
+      "cause": {
+        "individual_plan": "Individualplan ({{focus}}): {{sessions}} Einheiten in {{weeks}} Wochen",
+        "mentor": "Ein Mentor arbeitete {{weeks}} Wochen mit ihm",
+        "match_minutes": "{{minutes}} Spielminuten",
+        "training_load": "{{sessions}} Trainingseinheiten in {{weeks}} Wochen",
+        "idle": "Weder trainiert noch gespielt in {{weeks}} Wochen"
+      },
+      "effect": {
+        "rating_gain": "Wertung gestiegen ({{change}})",
+        "rating_loss": "Wertung gesunken ({{change}})",
+        "rating_held": "Wertung unverändert",
+        "character_shift": "Sein Charakter nähert sich dem seines Mentors an",
+        "stalled": "Nichts hat sich bewegt"
       }
     }
   },

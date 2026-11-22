@@ -118,7 +118,9 @@ pub(crate) fn release_player_contract(
         remove_player_from_team_references(team, &player_id);
     }
 
+    let released_on = game.clock.current_date.date_naive();
     let player = &mut game.players[player_index];
+    crate::youth_academy::end_academy_spell(player, released_on);
     player.team_id = None;
     player.active_loan = None;
     player.transfer_listed = false;

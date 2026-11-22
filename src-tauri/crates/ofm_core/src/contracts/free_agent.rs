@@ -276,6 +276,7 @@ pub(crate) fn sign_free_agent(
     player.transfer_listed = false;
     player.loan_listed = false;
     player.transfer_offers.clear();
+    crate::youth_academy::begin_academy_spell(player, team, current_date);
     record_movement(
         player,
         contract_entry(

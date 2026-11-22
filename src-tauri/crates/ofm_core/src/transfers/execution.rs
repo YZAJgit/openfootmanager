@@ -86,6 +86,12 @@ pub(super) fn execute_loan(
 
     // Captured before the player is borrowed mutably below.
     let closed_on = game.clock.current_date.format("%Y-%m-%d").to_string();
+    let loan_date = game.clock.current_date.date_naive();
+    let loan_team = game
+        .teams
+        .iter()
+        .find(|team| team.id == loan_team_id)
+        .cloned();
 
     let player = game
         .players
@@ -97,6 +103,10 @@ pub(super) fn execute_loan(
     player.jersey_number = resolved_jersey_number;
     player.transfer_listed = false;
     player.loan_listed = false;
+    crate::youth_academy::end_academy_spell(player, loan_date);
+    if let Some(loan_team) = &loan_team {
+        crate::youth_academy::begin_academy_spell(player, loan_team, loan_date);
+    }
     player.active_loan = Some(ActiveLoan {
         parent_team_id: parent_team_id.to_string(),
         loan_team_id: loan_team_id.to_string(),
@@ -391,6 +401,8 @@ pub(super) fn execute_transfer_with_schedule(
         p.jersey_number = resolved_jersey_number;
         p.transfer_listed = false;
         p.loan_listed = false;
+        crate::youth_academy::end_academy_spell(p, date);
+        crate::youth_academy::begin_academy_spell(p, &buying_team, date);
         // Joining a club is signing with it: a new contract on the buyer's terms from
         // the day the move happens. Nothing of the seller's contract is carried over.
         record_movement(

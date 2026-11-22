@@ -103,4 +103,5 @@ pub mod world;
 pub mod world_cup;
 pub mod world_query;
 pub mod world_sync;
+pub mod youth_academy;
 pub mod youth_intake;

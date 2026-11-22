@@ -182,7 +182,11 @@ fn process_day_common(game: &mut Game, today: &str) {
     // on the day a contract ends lands before the expiry that would release him.
     let weekday_num = game.clock.current_date.weekday().num_days_from_monday();
     crate::ai_contracts::apply_ai_contract_decisions(game, weekday_num);
+    crate::youth_academy::process_scholarship_transitions(game);
     crate::contracts::process_contract_expiries(game);
+    if weekday_num == 0 {
+        crate::youth_academy::monitor_guaranteed_youth_loan_minutes(game);
+    }
 
     // Weekly financial processing (wages, matchday income, warnings)
     crate::finances::process_weekly_finances(game);

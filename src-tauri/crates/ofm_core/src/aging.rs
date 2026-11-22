@@ -75,6 +75,7 @@ fn retire_player(player: &mut Player, current_date: NaiveDate) {
             ..PlayerMovementEntry::new(iso(current_date), PlayerMovementKind::Retired)
         },
     );
+    crate::youth_academy::end_academy_spell(player, current_date);
     player.retired = true;
     player.team_id = None;
     player.transfer_listed = false;

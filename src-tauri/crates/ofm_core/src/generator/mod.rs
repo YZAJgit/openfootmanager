@@ -217,7 +217,12 @@ fn sort_opening_youth_indices(players: &[Player], indices: &mut [usize]) {
     });
 }
 
-fn apply_opening_youth_assignments(players: &mut [Player], candidate_indices: Vec<usize>) -> usize {
+fn apply_opening_youth_assignments(
+    players: &mut [Player],
+    candidate_indices: Vec<usize>,
+    club: &Team,
+    opening_year: i32,
+) -> usize {
     use domain::player::SquadRole;
 
     let mut assigned = 0;
@@ -230,12 +235,20 @@ fn apply_opening_youth_assignments(players: &mut [Player], candidate_indices: Ve
             players[index].squad_role = SquadRole::Youth;
             assigned += 1;
         }
+        // Every opening scholar starts the world already in his club's academy.
+        if players[index].academy.training_spells.is_empty() {
+            crate::youth_academy::begin_academy_spell(
+                &mut players[index],
+                club,
+                domain::age::season_midpoint(opening_year),
+            );
+        }
     }
 
     assigned
 }
 
-fn seed_opening_youth_academy(players: &mut [Player], opening_year: i32) {
+fn seed_opening_youth_academy(players: &mut [Player], club: &Team, opening_year: i32) {
     let mut eligible_indices: Vec<usize> = players
         .iter()
         .enumerate()
@@ -244,7 +257,7 @@ fn seed_opening_youth_academy(players: &mut [Player], opening_year: i32) {
         .collect();
 
     sort_opening_youth_indices(players, &mut eligible_indices);
-    apply_opening_youth_assignments(players, eligible_indices);
+    apply_opening_youth_assignments(players, eligible_indices, club, opening_year);
 }
 
 pub fn repair_opening_youth_academies(game: &mut crate::game::Game) -> bool {
@@ -279,7 +292,15 @@ pub fn repair_opening_youth_academies(game: &mut crate::game::Game) -> bool {
             .collect();
 
         sort_opening_youth_indices(&game.players, &mut candidate_indices);
-        repaired |= apply_opening_youth_assignments(&mut game.players, candidate_indices) > 0;
+        let Some(club) = game.teams.iter().find(|team| team.id == team_id).cloned() else {
+            continue;
+        };
+        repaired |= apply_opening_youth_assignments(
+            &mut game.players,
+            candidate_indices,
+            &club,
+            opening_year,
+        ) > 0;
     }
 
     repaired
@@ -338,7 +359,7 @@ fn normalize_generated_team(
     opening_year: i32,
     authored_ids: &HashSet<String>,
 ) {
-    seed_opening_youth_academy(players, opening_year);
+    seed_opening_youth_academy(players, team, opening_year);
     normalize_opening_contracts(players, opening_year, authored_ids);
     // Last, and here rather than in `build_club`: the package path calls this
     // again after swapping generated players for authored ones, and a role

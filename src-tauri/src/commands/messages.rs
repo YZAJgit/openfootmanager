@@ -239,7 +239,15 @@ pub fn resolve_message_action_internal(
                 }
             }
             // Try to apply player conversation or random event response
-            let (effect, effect_i18n_key, effect_i18n_params) = if let Some(opt) = option_id {
+            let scholarship = option_id.and_then(|opt| {
+                ofm_core::youth_academy::apply_scholarship_response(
+                    game, message_id, action_id, opt,
+                )
+            });
+            let (effect, effect_i18n_key, effect_i18n_params) = if let Some(decided) = scholarship {
+                decided?;
+                (None, None, None)
+            } else if let Some(opt) = option_id {
                 // Try player events first, then random events
                 let player_effect = ofm_core::player_events::apply_player_response(
                     game, message_id, action_id, opt,
@@ -1280,5 +1288,49 @@ mod tests {
             .expect("game");
         assert_eq!(still_open, (true, true), "pending, and no deal signed");
         assert_eq!(resolve("accept"), Ok(()));
+    }
+
+    /// Given an eighteen-year-old scholar of the user's club with an open decision mail
+    /// When the manager answers "offer professional contract"
+    /// Then he is a senior and the action is resolved, so the deadline pass has nothing to release.
+    #[test]
+    fn a_scholarship_answer_turns_the_scholar_professional() {
+        let state = StateManager::new();
+        let mut game = make_game();
+        let mut scholar = squad_player("scholar");
+        scholar.date_of_birth = "2008-08-01".to_string();
+        scholar.squad_role = domain::player::SquadRole::Youth;
+        scholar.potential = 70;
+        game.players = vec![scholar];
+        game.teams[0].finance = 10_000_000;
+        game.teams[0].wage_budget = 10_000_000;
+        game.teams[0].transfer_budget = 10_000_000;
+        ofm_core::youth_academy::process_scholarship_transitions(&mut game);
+        let message_id = "scholarship_decision_scholar";
+        assert!(game.messages.iter().any(|message| message.id == message_id));
+        state.set_game(game);
+
+        resolve_message_action_internal(
+            &state,
+            Career::Active,
+            message_id,
+            message_id,
+            Some("scholarship_pro_scholar"),
+        )
+        .expect("the answer applies");
+
+        let (role, resolved) = state
+            .get_game(|game| {
+                (
+                    game.players[0].squad_role,
+                    game.messages
+                        .iter()
+                        .find(|message| message.id == message_id)
+                        .is_some_and(|message| message.actions[0].resolved),
+                )
+            })
+            .expect("game");
+        assert_eq!(role, domain::player::SquadRole::Senior);
+        assert!(resolved);
     }
 }

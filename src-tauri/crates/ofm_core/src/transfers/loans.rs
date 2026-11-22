@@ -1239,6 +1239,13 @@ pub(super) fn return_loanee_to_parent(game: &mut Game, player_id: &str) {
         _ => None,
     };
 
+    let returned_on = game.clock.current_date.date_naive();
+    let parent_team = loan_snapshot.as_ref().and_then(|loan| {
+        game.teams
+            .iter()
+            .find(|team| team.id == loan.parent_team_id)
+            .cloned()
+    });
 
     for team in &mut game.teams {
         team.remove_player_references(player_id);
@@ -1251,6 +1258,10 @@ pub(super) fn return_loanee_to_parent(game: &mut Game, player_id: &str) {
         && let Some(loan) = player.active_loan.take()
     {
         player.team_id = Some(loan.parent_team_id);
+        crate::youth_academy::end_academy_spell(player, returned_on);
+        if let Some(parent_team) = &parent_team {
+            crate::youth_academy::begin_academy_spell(player, parent_team, returned_on);
+        }
         player.jersey_number = resolved_jersey_number;
         player.loan_listed = false;
         clear_loan_terms(player);

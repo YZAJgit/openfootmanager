@@ -873,6 +873,10 @@ pub fn apply_season_end_squad_turnover(game: &mut Game, date: chrono::NaiveDate,
     crate::aging::apply_seasonal_aging(game, date, season);
     game.last_season_rollover_on = Some(date.format("%Y-%m-%d").to_string());
     crate::ai_contracts::plan_every_ai_squad(game);
+    // Retirement is a way to lose players too, and the daily check has already run on this day: a
+    // club it left short is warned now, not a day later. Before the intake, so the floor's
+    // academy promotion cannot pick a fifteen-year-old on the day he joins.
+    crate::squad_floor::keep_squads_at_the_floor(game);
     crate::youth_intake::apply_youth_intake(game, date, season);
 }
 

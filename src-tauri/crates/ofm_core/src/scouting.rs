@@ -804,6 +804,7 @@ pub fn apply_youth_recruitment_response(
                 .iter()
                 .find(|team| Some(&team.id) == game.manager.team_id.as_ref())
             {
+                crate::youth_academy::begin_academy_spell(&mut signed_player, team, today);
                 let own_terms = signed_player
                     .contract_end()
                     .and_then(crate::contracts::parse_contract_date)

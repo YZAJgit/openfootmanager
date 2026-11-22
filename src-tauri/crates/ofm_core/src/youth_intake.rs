@@ -53,10 +53,21 @@ pub struct IntakePlan {
 /// [`ACADEMY_TARGET_PER_GROUP`], between [`MIN_INTAKE`] and [`MAX_INTAKE`]; a
 /// keeper first when it has none, then its thinnest groups.
 pub fn plan_for<'a>(academy: impl IntoIterator<Item = &'a Player>) -> IntakePlan {
+    plan_with_extra(academy, 0)
+}
+
+/// [`plan_for`] for an academy that can hold `extra` more youngsters than the standard one (a
+/// higher category). The extras go to the thinnest groups, counting those already planned, and
+/// never take the academy past its enlarged capacity.
+pub(crate) fn plan_with_extra<'a>(
+    academy: impl IntoIterator<Item = &'a Player>,
+    extra: usize,
+) -> IntakePlan {
     let mut have = [0usize; 4];
     for player in academy {
         have[group_index(&player.position)] += 1;
     }
+    let held: usize = have.iter().sum();
     let size = intake_size(have);
 
     let keeper = group_index(&Position::Goalkeeper);
@@ -66,6 +77,13 @@ pub fn plan_for<'a>(academy: impl IntoIterator<Item = &'a Player>) -> IntakePlan
         have[keeper] += 1;
     }
     while groups.len() < size {
+        let thinnest = thinnest_first(have, ACADEMY_TARGET_PER_GROUP).remove(0);
+        have[group_index(&thinnest)] += 1;
+        groups.push(thinnest);
+    }
+    let capacity = ACADEMY_TARGET_PER_GROUP.iter().sum::<usize>() + extra;
+    let room = capacity.saturating_sub(held + groups.len());
+    for _ in 0..extra.min(room) {
         let thinnest = thinnest_first(have, ACADEMY_TARGET_PER_GROUP).remove(0);
         have[group_index(&thinnest)] += 1;
         groups.push(thinnest);
@@ -104,9 +122,13 @@ pub fn take_youth_intake(game: &mut Game, team_id: &str, date: NaiveDate, season
     };
     // An academy player out on loan belongs to the academy of the club that
     // owns him and gets him back, not the one borrowing him for a season.
-    let plan = plan_for(game.players.iter().filter(|player| {
-        player.squad_role == SquadRole::Youth && player.contract_club_id() == Some(team_id)
-    }));
+    let tier = game.teams[team_index].academy_tier;
+    let plan = crate::youth_academy::intake_plan_for_tier(
+        game.players.iter().filter(|player| {
+            player.squad_role == SquadRole::Youth && player.contract_club_id() == Some(team_id)
+        }),
+        tier,
+    );
 
     let intake = take_in(game, team_index, &plan, date);
     if game.manager.team_id.as_deref() == Some(team_id) {
@@ -183,7 +205,7 @@ fn draw_recruits(game: &Game, team_index: usize, plan: &IntakePlan, date: NaiveD
         .iter()
         .filter_map(|group| {
             let age = rng.random_range(INTAKE_AGES);
-            let recruit = crate::generator::generate_youth_intake_recruit(
+            let mut recruit = crate::generator::generate_youth_intake_recruit(
                 team,
                 &reputations,
                 group,
@@ -191,6 +213,7 @@ fn draw_recruits(game: &Game, team_index: usize, plan: &IntakePlan, date: NaiveD
                 date.year() as u32,
                 &mut rng,
             );
+            crate::youth_academy::apply_academy_tier_to_recruit(&mut recruit, team.academy_tier);
             let own_terms = recruit
                 .contract_end()
                 .and_then(crate::contracts::parse_contract_date)
@@ -239,6 +262,7 @@ fn sign_until_refused(
             ),
         );
         recruit.jersey_number = crate::roster::resolve_jersey_for(game, &recruit, team);
+        crate::youth_academy::record_academy_move(&mut recruit, team, date);
         joined.push(recruit.full_name.clone());
         game.players.push(recruit);
     }

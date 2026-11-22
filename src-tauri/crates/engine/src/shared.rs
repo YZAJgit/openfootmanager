@@ -333,12 +333,33 @@ pub(crate) fn play_style_modifier(
 
 /// The phases the resolvers ask a player of this position about. A table entry
 /// for any other phase can never fire.
+///
+/// - Goalkeeper: Defense (stopping shots, `keeper_role_factor`) and Midfield (playing out from
+///   the back, `keeper_buildup_factor`).
+/// - Defender: Defense (the attacking-third duel), Midfield (the build-up pass) and Attack
+///   (overlapping and crossing, `line_role_factor`).
+/// - Midfielder: Midfield and Defense (the midfield duel) and Attack (making the chance a shot
+///   comes from, `assist_creation_factor`).
+/// - Forward: Attack (the attacking-third duel), Press (`forward_press_factor`) and Midfield
+///   (linking play, `line_role_factor`).
 pub(crate) fn consulted_phases(position: Position) -> &'static [PlayStylePhase] {
     match position {
-        Position::Goalkeeper => &[],
-        Position::Defender => &[PlayStylePhase::Defense],
-        Position::Midfielder => &[PlayStylePhase::Midfield, PlayStylePhase::Defense],
-        Position::Forward => &[PlayStylePhase::Attack, PlayStylePhase::Press],
+        Position::Goalkeeper => &[PlayStylePhase::Defense, PlayStylePhase::Midfield],
+        Position::Defender => &[
+            PlayStylePhase::Defense,
+            PlayStylePhase::Midfield,
+            PlayStylePhase::Attack,
+        ],
+        Position::Midfielder => &[
+            PlayStylePhase::Midfield,
+            PlayStylePhase::Defense,
+            PlayStylePhase::Attack,
+        ],
+        Position::Forward => &[
+            PlayStylePhase::Attack,
+            PlayStylePhase::Press,
+            PlayStylePhase::Midfield,
+        ],
     }
 }
 
@@ -369,6 +390,59 @@ pub(crate) fn forward_press_factor<'a>(forwards: impl Iterator<Item = &'a Player
         .sum::<f64>()
 }
 
+/// The share of a player's entry above Standard that reaches a factor the resolvers read for his
+/// whole side rather than for him alone: the full-backs' overlaps on a cross, the forwards' link-up
+/// on the midfield duel. The same share as the forwards' press, so four overlapping Wing Backs
+/// (1.10) add 10% to the cross and a Defensive Full Back (0.93) takes 1.75% off it.
+const LINE_ROLE_SHARE: f64 = 0.25;
+
+/// What the players of `line` among `players` add to their side in `phase`, from their roles: 1.0
+/// for a line on Standard. The caller passes only the players on the pitch.
+pub(crate) fn line_role_factor<'a>(
+    line: Position,
+    phase: PlayStylePhase,
+    players: impl Iterator<Item = &'a PlayerData>,
+) -> f64 {
+    1.0 + players
+        .filter(|player| player.position == line)
+        .map(|player| (role_modifier(line, player.role, phase) - 1.0) * LINE_ROLE_SHARE)
+        .sum::<f64>()
+}
+
+/// The share of a goalkeeper's Midfield entry above Standard that reaches his side's build-up,
+/// and of a midfielder's Attack entry that reaches the shot he makes: each is one of several
+/// hands on the move, not the whole of it.
+const SUPPORTING_ROLE_SHARE: f64 = 0.5;
+
+/// The factor on a keeper's shot stopping for his role. Only a keeper's role counts: an
+/// outfielder put in goal keeps his outfield role, and brings none of a keeper's to it.
+pub(crate) fn keeper_role_factor(role: PlayerRole) -> f64 {
+    keeper_role_entry(role, PlayStylePhase::Defense)
+}
+
+/// The factor on a side's build-up pass for its keeper's role: a Ball Playing Keeper gives the
+/// back line a man more to play through. 1.0 with nobody in goal.
+pub(crate) fn keeper_buildup_factor(role: Option<PlayerRole>) -> f64 {
+    role.map_or(1.0, |role| {
+        1.0 + (keeper_role_entry(role, PlayStylePhase::Midfield) - 1.0) * SUPPORTING_ROLE_SHARE
+    })
+}
+
+fn keeper_role_entry(role: PlayerRole, phase: PlayStylePhase) -> f64 {
+    if role.suits(Position::Goalkeeper) {
+        role_modifier(Position::Goalkeeper, role, phase)
+    } else {
+        1.0
+    }
+}
+
+/// The factor on a shot for the role of the midfielder who made the chance: an Advanced
+/// Playmaker's pass sets up a cleaner shot than an Anchor Man's.
+pub(crate) fn assist_creation_factor(creator: PlayerRole) -> f64 {
+    1.0 + (role_modifier(Position::Midfielder, creator, PlayStylePhase::Attack) - 1.0)
+        * SUPPORTING_ROLE_SHARE
+}
+
 /// What a role costs a player in condition each minute: a Pressing Forward runs more, at the
 /// aggressive press's rate (`tactics_pressing_fatigue`). The live engine's alone, which is the
 /// one that tracks each player's condition. Only while the line he plays admits the role
@@ -394,17 +468,17 @@ pub fn role_has_match_effect(role: PlayerRole, position: Position) -> bool {
         || crate::ai::substitution_reads_role(role, position)
 }
 
-/// Returns a multiplier (0.88–1.20) applied to the player's effective skill
+/// Returns a multiplier (0.85–1.15) applied to the player's effective skill
 /// calculation based on their assigned tactical role. Values reflect the
 /// attribute biases described in domain::team::PlayerRole documentation.
 //
-// The penalty half of AttackingFB, WingBack and ShadowStriker is gone: their boost is on
-// a phase the resolvers never ask their position about, so only the penalty fired.
-// Restore both halves together when that phase is wired.
+// AttackingFB, WingBack and ShadowStriker carry their Defense penalty again now that the phase
+// their boost is on (Attack) is consulted for their line: a role trades one phase for another.
 fn role_attribute_modifier(role: PlayerRole, phase: PlayStylePhase) -> f64 {
     match (role, phase) {
         // Goalkeepers
-        (PlayerRole::SweeperKeeper, PlayStylePhase::Defense) => 1.06,
+        (PlayerRole::SweeperKeeper, PlayStylePhase::Defense) => 1.04,
+        (PlayerRole::SweeperKeeper, PlayStylePhase::Midfield) => 1.03,
         (PlayerRole::BallPlayingKeeper, PlayStylePhase::Midfield) => 1.06,
         // Center Backs
         (PlayerRole::Stopper, PlayStylePhase::Defense) => 1.08,
@@ -412,9 +486,11 @@ fn role_attribute_modifier(role: PlayerRole, phase: PlayStylePhase) -> f64 {
         (PlayerRole::CoverCB, PlayStylePhase::Defense) => 1.05,
         // Full Backs
         (PlayerRole::AttackingFB, PlayStylePhase::Attack) => 1.08,
+        (PlayerRole::AttackingFB, PlayStylePhase::Defense) => 0.95,
         (PlayerRole::DefensiveFB, PlayStylePhase::Defense) => 1.08,
         (PlayerRole::DefensiveFB, PlayStylePhase::Attack) => 0.93,
         (PlayerRole::WingBack, PlayStylePhase::Attack) => 1.10,
+        (PlayerRole::WingBack, PlayStylePhase::Defense) => 0.94,
         (PlayerRole::InvertedFB, PlayStylePhase::Midfield) => 1.06,
         // Defensive Midfielders
         (PlayerRole::AnchorMan, PlayStylePhase::Defense) => 1.10,
@@ -430,6 +506,7 @@ fn role_attribute_modifier(role: PlayerRole, phase: PlayStylePhase) -> f64 {
         // Attacking Midfielders
         (PlayerRole::AdvancedPlaymaker, PlayStylePhase::Attack) => 1.10,
         (PlayerRole::ShadowStriker, PlayStylePhase::Attack) => 1.08,
+        (PlayerRole::ShadowStriker, PlayStylePhase::Defense) => 0.95,
         // Wide
         (PlayerRole::WideForward, PlayStylePhase::Attack) => 1.08,
         (PlayerRole::InsideForward, PlayStylePhase::Attack) => 1.10,
@@ -707,20 +784,69 @@ mod phase_modifier_tests {
     fn an_entry_for_a_phase_nobody_asks_about_never_fires() {
         assert_eq!(
             role_modifier(
-                Position::Defender,
-                PlayerRole::AttackingFB,
-                PlayStylePhase::Attack
+                Position::Forward,
+                PlayerRole::Poacher,
+                PlayStylePhase::Defense
             ),
             1.0
         );
         assert_eq!(
             role_modifier(
-                Position::Goalkeeper,
-                PlayerRole::SweeperKeeper,
-                PlayStylePhase::Defense
+                Position::Defender,
+                PlayerRole::PressingForward,
+                PlayStylePhase::Press
             ),
             1.0
         );
+    }
+
+    /// Given every role and every line it may be played in,
+    /// When asked whether the engine plays it differently from Standard,
+    /// Then it always does: no role is a label the match ignores.
+    #[test]
+    fn every_role_changes_the_match_in_every_line_it_suits() {
+        for role in PlayerRole::ALL {
+            for &line in role.position_groups() {
+                assert!(
+                    role_has_match_effect(role, line),
+                    "{role:?} as a {line:?} has no match effect"
+                );
+            }
+        }
+    }
+
+    /// Given the factors read off whole lines and supporting players,
+    /// When the strongest and weakest roles fill them one player at a time,
+    /// Then each stays a gentle nudge, within 0.93 and 1.08.
+    #[test]
+    fn the_supporting_role_factors_are_gentle() {
+        for role in PlayerRole::ALL {
+            let creation = assist_creation_factor(role);
+            assert!((0.93..=1.08).contains(&creation), "{role:?}: {creation}");
+            for factor in [keeper_role_factor(role), keeper_buildup_factor(Some(role))] {
+                assert!((0.93..=1.08).contains(&factor), "{role:?}: {factor}");
+            }
+            for (line, phase) in [
+                (Position::Defender, PlayStylePhase::Attack),
+                (Position::Forward, PlayStylePhase::Midfield),
+            ] {
+                let mut one = crate::test_support::player("p", line);
+                one.role = role;
+                let factor = line_role_factor(line, phase, std::iter::once(&one));
+                assert!(
+                    (0.93..=1.08).contains(&factor),
+                    "{role:?} {line:?}: {factor}"
+                );
+            }
+        }
+    }
+
+    /// Given an outfielder in goal on a defender's role,
+    /// When his shot stopping is read, Then his role adds nothing: it is not a keeper's.
+    #[test]
+    fn an_outfielder_in_goal_brings_no_keepers_role() {
+        assert_eq!(keeper_role_factor(PlayerRole::Stopper), 1.0);
+        assert_eq!(keeper_role_factor(PlayerRole::SweeperKeeper), 1.04);
     }
 
     /// Given the entries the engine does consult, When asked, Then they still apply.

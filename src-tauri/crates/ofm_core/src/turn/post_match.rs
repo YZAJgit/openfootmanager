@@ -195,6 +195,17 @@ pub(super) fn apply_match_report_in<F>(
     deplete_match_stamina(game, &home_club, home_team_id, report);
     deplete_match_stamina(game, &away_club, away_team_id, report);
 
+    // The players who took part build their on-pitch understanding, and both sides know their
+    // shape a match better.
+    record_chemistry_and_familiarity(
+        game,
+        report,
+        [
+            (home_team_id, &home_club[..]),
+            (away_team_id, &away_club[..]),
+        ],
+    );
+
     // The engine's injury events become real injuries, and the user's physio reports theirs.
     let fixture_id = game
         .league
@@ -309,6 +320,41 @@ pub(super) fn apply_match_report_in<F>(
     // Generate match report news article
     if generates_match_news {
         super::news::generate_match_news(game, fixture_index, home_team_id, away_team_id, report);
+    }
+}
+
+/// Add the match to the pair chemistry of the players who took part (home side first, as
+/// `record_match_chemistry` reads the result by it) and to each side's familiarity with its shape.
+fn record_chemistry_and_familiarity(
+    game: &mut Game,
+    report: &engine::MatchReport,
+    sides: [(&str, &[usize]); 2],
+) {
+    let lineups: Vec<Vec<String>> = sides
+        .iter()
+        .map(|(_, club)| {
+            club.iter()
+                .filter_map(|&position| game.players.get(position))
+                .filter(|player| {
+                    report
+                        .player_stats
+                        .get(&player.id)
+                        .is_some_and(|stats| stats.minutes_played > 0)
+                })
+                .map(|player| player.id.clone())
+                .collect()
+        })
+        .collect();
+    crate::chemistry::record_match_chemistry(
+        &mut game.pair_chemistry,
+        report,
+        &lineups,
+        &crate::chemistry::goal_assist_pairs(report),
+    );
+    for (team_id, _) in sides {
+        if let Some(team) = game.teams.iter_mut().find(|team| team.id == team_id) {
+            crate::chemistry::update_tactical_familiarity(team);
+        }
     }
 }
 
@@ -999,6 +1045,41 @@ mod tests {
                 .iter()
                 .all(|stats| (1.0..=10.0).contains(&stats.rating))
         );
+    }
+
+    /// Given two squads that have never played together, each in its own shape
+    /// When their match day is played and the report applied
+    /// Then every pair of team-mates who shared the pitch holds their minutes, no pair spans the
+    ///      two sides, and both sides have played one match in their shape
+    #[test]
+    fn a_played_match_builds_team_mates_chemistry_and_both_sides_familiarity() {
+        let mut game = match_game();
+        crate::turn::process_day_with_capture(&mut game, &mut |_| {});
+
+        let club_of = |id: &str| {
+            game.players
+                .iter()
+                .find(|player| player.id == id)
+                .and_then(|player| player.team_id.clone())
+        };
+        // Eleven starters a side make 55 pairs each before any substitute.
+        assert!(
+            game.pair_chemistry.len() >= 2 * 55,
+            "{}",
+            game.pair_chemistry.len()
+        );
+        for pair in &game.pair_chemistry {
+            assert_eq!(club_of(&pair.player_a), club_of(&pair.player_b), "{pair:?}");
+            assert!(pair.shared_minutes > 0, "{pair:?}");
+        }
+        for team in &game.teams {
+            assert_eq!(
+                team.tactical_familiarity.formation, team.formation,
+                "{}",
+                team.id
+            );
+            assert_eq!(team.tactical_familiarity.matches_together, 1, "{}", team.id);
+        }
     }
 
     /// Given a saved average over two rated matches and a career row, when a rated match is

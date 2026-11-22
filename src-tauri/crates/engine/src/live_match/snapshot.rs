@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use crate::types::Side;
+use crate::xg::total_xg;
+
 use super::{LiveMatchState, MatchPhase, MatchSnapshot, PenaltyShootoutSnapshot};
 
 // ---------------------------------------------------------------------------
@@ -116,6 +119,9 @@ impl LiveMatchState {
             sent_off: self.sent_off.clone(),
             penalty_shootout,
             player_ratings,
+            shots: self.shots.clone(),
+            home_xg: total_xg(self.shots.iter(), Side::Home),
+            away_xg: total_xg(self.shots.iter(), Side::Away),
         }
     }
 }

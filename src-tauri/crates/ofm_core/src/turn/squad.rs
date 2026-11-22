@@ -890,7 +890,7 @@ pub(crate) fn engine_line(position: &DomainPosition) -> Position {
     }
 }
 
-fn to_engine_player(
+pub(super) fn to_engine_player(
     p: &domain::player::Player,
     role: EnginePlayerRole,
     deployed: Option<&DomainPosition>,

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::event::{EventType, MatchEvent};
 use crate::types::{Side, Zone};
+use crate::xg::{ShotMapEntry, total_xg};
 
 // ---------------------------------------------------------------------------
 // TeamStats — aggregate stats for one side
@@ -26,6 +27,12 @@ pub struct TeamStats {
     pub yellow_cards: u8,
     pub red_cards: u8,
     pub possession_ticks: u32,
+    /// The side's expected goals: the sum of its shots' values on the shot map.
+    #[serde(default)]
+    pub xg: f32,
+    /// The side's shots, placed and valued; shootout kicks are not shots of the match.
+    #[serde(default)]
+    pub shot_map: Vec<ShotMapEntry>,
 }
 
 impl TeamStats {
@@ -121,6 +128,38 @@ pub struct MatchReport {
 }
 
 impl MatchReport {
+    /// Put the match's shots on each side's stats, and its expected goals with them. The shot map
+    /// lives on `TeamStats` rather than on the report so that a caller who builds a report by
+    /// hand, field by field, keeps compiling.
+    pub fn attach_shot_map(&mut self, shots: Vec<ShotMapEntry>) {
+        self.home_stats.xg = total_xg(shots.iter(), Side::Home);
+        self.away_stats.xg = total_xg(shots.iter(), Side::Away);
+        let (home, away): (Vec<_>, Vec<_>) =
+            shots.into_iter().partition(|shot| shot.side == Side::Home);
+        self.home_stats.shot_map = home;
+        self.away_stats.shot_map = away;
+    }
+
+    pub fn home_xg(&self) -> f32 {
+        self.home_stats.xg
+    }
+
+    pub fn away_xg(&self) -> f32 {
+        self.away_stats.xg
+    }
+
+    /// Every shot of the match, by minute.
+    pub fn shot_map(&self) -> Vec<&ShotMapEntry> {
+        let mut shots: Vec<&ShotMapEntry> = self
+            .home_stats
+            .shot_map
+            .iter()
+            .chain(&self.away_stats.shot_map)
+            .collect();
+        shots.sort_by_key(|shot| shot.minute);
+        shots
+    }
+
     /// Build the report from the raw event log and possession counters.
     pub fn from_events(
         events: Vec<MatchEvent>,

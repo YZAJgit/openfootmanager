@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod engine;
 pub mod event;
+pub(crate) mod extras;
 pub mod live_match;
 pub mod rating;
 pub mod report;
@@ -8,11 +9,14 @@ pub(crate) mod shared;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod types;
+pub mod xg;
 
 // Re-export key types for convenience
 pub use engine::simulate;
+pub use engine::simulate_with_extras;
 pub use engine::simulate_with_rng;
 pub use event::{EventType, MatchEvent};
+pub use extras::TeamExtras;
 pub use live_match::{
     LiveMatchState, MatchCommand, MatchPhase, MatchSnapshot, MinuteResult, PenaltyShootoutSnapshot,
     SetPieceTakers, ShootoutOrderSnapshot, SubstitutionRecord,
@@ -22,5 +26,6 @@ pub use shared::role_has_match_effect;
 pub use types::{
     BreakSpeed, CounterPressDuration, DefensiveLine, DefensiveShape, MarkingStyle, MatchConfig,
     PlayStyle, PlayerData, PlayerRole, Position, PressingIntensity, Side, TacticalDial,
-    TacticsBuildUpStyle, TacticsConfig, TacticsPitchWidth, TeamData, Tempo, Zone,
+    TacticsBuildUpStyle, TacticsConfig, TacticsPitchWidth, TeamData, TeamTalkTone, Tempo, Zone,
 };
+pub use xg::{ShotBodyPart, ShotMapEntry, ShotOutcome, compute_shot_xg};

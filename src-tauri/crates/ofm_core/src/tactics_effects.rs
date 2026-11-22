@@ -1,8 +1,8 @@
 //! Which tactics controls change a match, for the screens to say so: one answer, from the engine
 //! where the engine can give it. A control counts when a resolver reads it or the engine's AI does
-//! (it chooses by it in a match it manages). A control nothing reads yet is reported here as having
-//! no effect until the slice of the tactics wiring plan that wires it, which flips it in the same
-//! change.
+//! (it chooses by it in a match it manages). Every role in a slot that admits it, every match role
+//! and the team talk are read today; a role in a slot that does not admit it is played as
+//! Standard and so changes nothing.
 
 use domain::player::{Player, Position as DomainPosition};
 use domain::team::PlayerRole;
@@ -39,13 +39,15 @@ pub fn has_match_effect(control: &TacticsControl) -> bool {
                 && engine::role_has_match_effect(domain_to_engine_role(role), engine_line(slot))
         }
         TacticsControl::Dial(dial) => dial.has_match_effect(),
-        TacticsControl::PenaltyTaker => true,
-        // Read by nothing in the engine yet: slices 10 to 12 of the wiring plan.
-        TacticsControl::Captain
+        // Each is handed to the match as the side's `TeamExtras` (`live_match_manager`): the
+        // takers take their set pieces, the captain and vice-captain lead the side's composure,
+        // and the talk moves its mood (`engine::extras`).
+        TacticsControl::PenaltyTaker
+        | TacticsControl::Captain
         | TacticsControl::ViceCaptain
         | TacticsControl::FreeKickTaker
         | TacticsControl::CornerTaker
-        | TacticsControl::TeamTalk => false,
+        | TacticsControl::TeamTalk => true,
     }
 }
 
@@ -125,32 +127,98 @@ mod tests {
         assert!(!role(PlayerRole::Poacher, DomainPosition::Goalkeeper));
     }
 
-    /// Given the roles no resolver reads in these slots today,
-    /// When the screen asks about them,
-    /// Then none changes the match, until the slice that wires it.
+    /// Every role, so a test over roles cannot miss one: a new variant breaks the exhaustive match
+    /// in `every_role_is_listed`.
+    const ALL_ROLES: [PlayerRole; 27] = [
+        PlayerRole::Standard,
+        PlayerRole::BallPlayingKeeper,
+        PlayerRole::SweeperKeeper,
+        PlayerRole::Stopper,
+        PlayerRole::CoverCB,
+        PlayerRole::BallPlayingCB,
+        PlayerRole::AttackingFB,
+        PlayerRole::DefensiveFB,
+        PlayerRole::InvertedFB,
+        PlayerRole::WingBack,
+        PlayerRole::AnchorMan,
+        PlayerRole::BallWinner,
+        PlayerRole::DeepLyingPlaymaker,
+        PlayerRole::BoxToBox,
+        PlayerRole::Carrilero,
+        PlayerRole::Mezzala,
+        PlayerRole::AdvancedPlaymaker,
+        PlayerRole::ShadowStriker,
+        PlayerRole::WideForward,
+        PlayerRole::InsideForward,
+        PlayerRole::InvertedWinger,
+        PlayerRole::Poacher,
+        PlayerRole::TargetMan,
+        PlayerRole::DeepLyingForward,
+        PlayerRole::False9,
+        PlayerRole::PressingForward,
+        PlayerRole::CompleteForward,
+    ];
+
     #[test]
-    fn a_role_no_resolver_reads_in_its_slot_has_no_match_effect() {
-        for (role_, slot) in [
-            (PlayerRole::SweeperKeeper, DomainPosition::Goalkeeper),
-            (PlayerRole::BallPlayingKeeper, DomainPosition::Goalkeeper),
-            (PlayerRole::BallPlayingCB, DomainPosition::CenterBack),
-            (PlayerRole::AttackingFB, DomainPosition::RightBack),
-            (PlayerRole::WingBack, DomainPosition::LeftWingBack),
-            (PlayerRole::InvertedFB, DomainPosition::LeftBack),
-            (PlayerRole::Mezzala, DomainPosition::CentralMidfielder),
-            (
-                PlayerRole::AdvancedPlaymaker,
-                DomainPosition::AttackingMidfielder,
-            ),
-            (
-                PlayerRole::ShadowStriker,
-                DomainPosition::AttackingMidfielder,
-            ),
-            (PlayerRole::DeepLyingForward, DomainPosition::Striker),
-            (PlayerRole::InvertedWinger, DomainPosition::RightWinger),
-            (PlayerRole::WideForward, DomainPosition::LeftMidfielder),
-        ] {
-            assert!(!role(role_.clone(), slot.clone()), "{role_:?} at {slot:?}");
+    fn every_role_is_listed() {
+        for listed in &ALL_ROLES {
+            match listed {
+                PlayerRole::Standard
+                | PlayerRole::BallPlayingKeeper
+                | PlayerRole::SweeperKeeper
+                | PlayerRole::Stopper
+                | PlayerRole::CoverCB
+                | PlayerRole::BallPlayingCB
+                | PlayerRole::AttackingFB
+                | PlayerRole::DefensiveFB
+                | PlayerRole::InvertedFB
+                | PlayerRole::WingBack
+                | PlayerRole::AnchorMan
+                | PlayerRole::BallWinner
+                | PlayerRole::DeepLyingPlaymaker
+                | PlayerRole::BoxToBox
+                | PlayerRole::Carrilero
+                | PlayerRole::Mezzala
+                | PlayerRole::AdvancedPlaymaker
+                | PlayerRole::ShadowStriker
+                | PlayerRole::WideForward
+                | PlayerRole::InsideForward
+                | PlayerRole::InvertedWinger
+                | PlayerRole::Poacher
+                | PlayerRole::TargetMan
+                | PlayerRole::DeepLyingForward
+                | PlayerRole::False9
+                | PlayerRole::PressingForward
+                | PlayerRole::CompleteForward => {}
+            }
+        }
+    }
+
+    /// Given every one of the 27 roles and every slot on the pitch,
+    /// When the screen asks about each role in each slot that admits it,
+    /// Then every one changes the match, the roles the old slices left unread among them
+    ///      (Sweeper Keeper, Wing Back, Mezzala, Shadow Striker, Inverted Winger on the wing ...).
+    #[test]
+    fn every_role_changes_the_match_in_every_slot_that_admits_it() {
+        let mut admitted = 0;
+        for slot in DomainPosition::ALL {
+            for role_ in ALL_ROLES.iter().filter(|r| slot.admits_role(r)) {
+                admitted += 1;
+                assert!(role(role_.clone(), slot.clone()), "{role_:?} at {slot:?}");
+            }
+        }
+        assert!(admitted >= 27, "only {admitted} admitted pairs");
+    }
+
+    /// Given every role and every slot that does not admit it,
+    /// When the screen asks about it there,
+    /// Then it changes nothing: the match plays it as Standard.
+    #[test]
+    fn no_role_counts_in_a_slot_that_does_not_admit_it() {
+        for slot in DomainPosition::ALL {
+            for role_ in ALL_ROLES.iter().filter(|r| !slot.admits_role(r)) {
+                assert!(!role(role_.clone(), slot.clone()), "{role_:?} at {slot:?}");
+            }
         }
     }
 
@@ -185,18 +253,18 @@ mod tests {
 
     /// Given the match roles and the team talk,
     /// When the screen asks about them,
-    /// Then the penalty taker changes the match and the rest do not yet.
+    /// Then every one changes the match: each is handed to it as the side's extras.
     #[test]
-    fn only_the_penalty_taker_of_the_match_roles_changes_the_match() {
-        assert!(has_match_effect(&TacticsControl::PenaltyTaker));
+    fn every_match_role_and_the_team_talk_change_the_match() {
         for control in [
+            TacticsControl::PenaltyTaker,
             TacticsControl::Captain,
             TacticsControl::ViceCaptain,
             TacticsControl::FreeKickTaker,
             TacticsControl::CornerTaker,
             TacticsControl::TeamTalk,
         ] {
-            assert!(!has_match_effect(&control), "{control:?}");
+            assert!(has_match_effect(&control), "{control:?}");
         }
     }
 

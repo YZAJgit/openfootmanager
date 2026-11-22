@@ -1,3 +1,4 @@
+mod extras_play;
 mod helpers;
 mod observation;
 mod penalty;
@@ -13,10 +14,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 pub(crate) use observation::AiObservation;
 
 use crate::event::MatchEvent;
+use crate::extras::{PendingSetPiece, TeamExtras};
 use crate::report::MatchReport;
 use crate::types::{
-    MatchConfig, PlayStyle, PlayerData, PlayerRole, Position, Side, TacticalDial, TeamData, Zone,
+    MatchConfig, PlayStyle, PlayerData, PlayerRole, Position, Side, TacticalDial, TeamData,
+    TeamTalkTone, Zone,
 };
+use crate::xg::ShotMapEntry;
 
 // ---------------------------------------------------------------------------
 // MatchPhase — tracks where we are in the match lifecycle
@@ -72,6 +76,17 @@ pub enum MatchCommand {
         side: Side,
         player_id: String,
     },
+    /// Name who leads the side once its captain has left the pitch.
+    SetViceCaptain {
+        side: Side,
+        player_id: String,
+    },
+    /// The manager's team talk: before kick-off, at a break, or from the touchline. It replaces
+    /// the side's previous talk, and its effect is measured from the minute it is given.
+    ApplyTeamTalk {
+        side: Side,
+        tone: TeamTalkTone,
+    },
     PreMatchSwap {
         side: Side,
         player_off_id: String,
@@ -106,6 +121,8 @@ impl MatchCommand {
             | Self::SetCornerTaker { side, .. }
             | Self::SetPenaltyTaker { side, .. }
             | Self::SetCaptain { side, .. }
+            | Self::SetViceCaptain { side, .. }
+            | Self::ApplyTeamTalk { side, .. }
             | Self::PreMatchSwap { side, .. }
             | Self::ChangePlayerRole { side, .. }
             | Self::ChangeTacticalDial { side, .. }
@@ -136,6 +153,9 @@ pub struct SetPieceTakers {
     pub corner_taker: Option<String>,
     pub penalty_taker: Option<String>,
     pub captain: Option<String>,
+    /// Leads the side while the captain is off the pitch (substituted or sent off).
+    #[serde(default)]
+    pub vice_captain: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +208,13 @@ pub struct MatchSnapshot {
     /// empty while it is live so a snapshot stays cheap to build every minute.
     #[serde(default)]
     pub player_ratings: HashMap<String, f32>,
+    /// Every shot of the match so far, shootout kicks excepted, placed and valued.
+    #[serde(default)]
+    pub shots: Vec<ShotMapEntry>,
+    #[serde(default)]
+    pub home_xg: f32,
+    #[serde(default)]
+    pub away_xg: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +325,14 @@ pub struct LiveMatchState {
     home_set_pieces: SetPieceTakers,
     away_set_pieces: SetPieceTakers,
 
+    /// Each side's team talk and the minute it was given.
+    home_talk: (TeamTalkTone, u8),
+    away_talk: (TeamTalkTone, u8),
+    /// A set piece put into the box, waiting for the shot it makes.
+    pending_set_piece: Option<PendingSetPiece>,
+    /// The shot map: every shot of the match, shootout kicks excepted.
+    shots: Vec<ShotMapEntry>,
+
     // Extra time / knockout
     allows_extra_time: bool,
 
@@ -367,6 +402,10 @@ impl LiveMatchState {
             away_slot_roles: None,
             home_set_pieces: SetPieceTakers::default(),
             away_set_pieces: SetPieceTakers::default(),
+            home_talk: (TeamTalkTone::Neutral, 0),
+            away_talk: (TeamTalkTone::Neutral, 0),
+            pending_set_piece: None,
+            shots: Vec::new(),
             allows_extra_time,
             first_half_stoppage: 0,
             second_half_stoppage: 0,
@@ -436,6 +475,14 @@ impl LiveMatchState {
             }
             MatchCommand::SetCaptain { side, player_id } => {
                 self.set_pieces_mut(side).captain = Some(player_id);
+                Ok(())
+            }
+            MatchCommand::SetViceCaptain { side, player_id } => {
+                self.set_pieces_mut(side).vice_captain = Some(player_id);
+                Ok(())
+            }
+            MatchCommand::ApplyTeamTalk { side, tone } => {
+                self.set_team_talk(side, tone);
                 Ok(())
             }
             MatchCommand::PreMatchSwap {
@@ -512,7 +559,45 @@ impl LiveMatchState {
             stats.minutes_in_goal = Some(self.minutes_in_goal.get(id).copied().unwrap_or(0));
         }
         report.assign_ratings(&home_squad, &away_squad);
+        report.attach_shot_map(self.shots.clone());
         report
+    }
+
+    /// Give `side` a team talk now. It replaces the side's last one.
+    pub fn set_team_talk(&mut self, side: Side, tone: TeamTalkTone) {
+        let given = (tone, self.current_minute);
+        match side {
+            Side::Home => self.home_talk = given,
+            Side::Away => self.away_talk = given,
+        }
+    }
+
+    /// Set everything a side brings beyond its players and tactics at once: its captain,
+    /// vice-captain and set-piece takers, and its team talk.
+    pub fn apply_team_extras(
+        &mut self,
+        side: Side,
+        set_pieces: SetPieceTakers,
+        talk: TeamTalkTone,
+    ) {
+        *self.set_pieces_mut(side) = set_pieces;
+        self.set_team_talk(side, talk);
+    }
+
+    /// Both at once, from the bundle the instant engine takes.
+    pub fn apply_extras(&mut self, side: Side, extras: &TeamExtras) {
+        self.apply_team_extras(side, extras.set_pieces.clone(), extras.talk);
+    }
+
+    /// Who leads `side` on the pitch right now: its captain while he is on it, else its
+    /// vice-captain while he is, else nobody.
+    pub fn acting_captain_id(&self, side: Side) -> Option<&str> {
+        self.acting_captain(side).map(|player| player.id.as_str())
+    }
+
+    /// The shot map so far.
+    pub fn shots(&self) -> &[ShotMapEntry] {
+        &self.shots
     }
 
     /// Is the match finished?

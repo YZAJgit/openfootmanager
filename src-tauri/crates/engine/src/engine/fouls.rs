@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 use crate::event::{EventType, MatchEvent};
 use crate::shared::{PlayerSnap, TraitContext, trait_bonus};
 use crate::types::{Position, Side, Zone};
+use crate::xg::{ShotBodyPart, ShotOutcome, ShotRecord};
 
 use super::MatchContext;
 use super::snap_player;
@@ -29,7 +30,8 @@ pub(super) fn maybe_foul<R: Rng>(
     let foul_chance = ctx.config.foul_probability
         * (0.6 + aggression_mod * 0.8)
         * trait_bonus(fouler_snap, TraitContext::Foul)
-        * tactics_mod;
+        * tactics_mod
+        * ctx.foul_temper(fouling_side);
     if rng.random_range(0.0..1.0f64) >= foul_chance {
         return false;
     }
@@ -86,7 +88,10 @@ pub(super) fn maybe_card<R: Rng>(
     } else {
         1.0
     };
-    let card_chance = ctx.config.yellow_card_probability * (0.5 + aggression_factor) * caution;
+    let card_chance = ctx.config.yellow_card_probability
+        * (0.5 + aggression_factor)
+        * caution
+        * ctx.card_temper(side);
     if rng.random_range(0.0..1.0f64) >= card_chance {
         return;
     }
@@ -116,15 +121,31 @@ pub(super) fn resolve_penalty<R: Rng>(
     att_side: Side,
     rng: &mut R,
 ) {
-    let taker = snap_player(ctx, att_side, Position::Forward, rng);
+    let taker = ctx
+        .penalty_taker(att_side)
+        .unwrap_or_else(|| snap_player(ctx, att_side, Position::Forward, rng));
     let gk = snap_player(ctx, att_side.opposite(), Position::Goalkeeper, rng);
 
     let shoot_skill = (taker.shooting as f64 + taker.decisions as f64) / 2.0;
     let gk_skill = (gk.positioning as f64 + gk.decisions as f64) / 2.0;
     let conversion = (0.75 + (shoot_skill - gk_skill) / 300.0).clamp(0.55, 0.92);
     let zone = Zone::attacking_box(att_side);
+    let scored = rng.random_range(0.0..1.0f64) < conversion;
+    ctx.record_shot(ShotRecord {
+        minute,
+        side: att_side,
+        shooter_id: &taker.id,
+        body_part: ShotBodyPart::Penalty,
+        outcome: if scored {
+            ShotOutcome::Goal
+        } else {
+            ShotOutcome::Saved
+        },
+        assisted_by: None,
+        sharpness: (shoot_skill / 100.0) as f32,
+    });
 
-    if rng.random_range(0.0..1.0f64) < conversion {
+    if scored {
         ctx.emit(
             MatchEvent::new(minute, EventType::PenaltyGoal, att_side, zone).with_player(&taker.id),
         );

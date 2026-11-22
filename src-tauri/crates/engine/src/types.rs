@@ -144,6 +144,24 @@ impl PlayerRole {
 }
 
 // ---------------------------------------------------------------------------
+// TeamTalkTone — what the manager told the side before kick-off or at the break
+// ---------------------------------------------------------------------------
+
+/// The tone of a team talk. The engine plays it as a small, bounded lift or cost to the side's
+/// mood, aggression and running (`extras::team_talk_effect`); `Neutral` is a side that was told
+/// nothing and plays exactly as it always did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum TeamTalkTone {
+    #[default]
+    Neutral,
+    Encourage,
+    DemandMore,
+    Calm,
+    FireUp,
+    Praise,
+}
+
+// ---------------------------------------------------------------------------
 // PlayerData — a snapshot of a player for engine consumption
 // ---------------------------------------------------------------------------
 
@@ -636,7 +654,8 @@ impl Default for MatchConfig {
 // Side — which side of the match
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ts_rs::TS)]
+#[ts(rename_all = "PascalCase")]
 pub enum Side {
     Home,
     Away,

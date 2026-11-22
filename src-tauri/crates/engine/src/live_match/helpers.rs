@@ -20,8 +20,13 @@ impl LiveMatchState {
     pub(super) fn deplete_stamina_tick(&mut self) {
         let base_rate = self.config.fatigue_per_minute;
         // Aggressive pressing tires a side faster; neutral (Medium) is ×1.0.
-        let home_rate = base_rate * tactics_pressing_fatigue(&self.home.tactics);
-        let away_rate = base_rate * tactics_pressing_fatigue(&self.away.tactics);
+        // A team talk that fires a side up has it running harder; a calming one, less.
+        let home_rate = base_rate
+            * tactics_pressing_fatigue(&self.home.tactics)
+            * self.talk_effect(Side::Home).fatigue;
+        let away_rate = base_rate
+            * tactics_pressing_fatigue(&self.away.tactics)
+            * self.talk_effect(Side::Away).fatigue;
         // Iterate over all on-pitch players, each with their team's fatigue rate.
         let players = self
             .home
@@ -72,18 +77,25 @@ impl LiveMatchState {
         rng: &mut R,
     ) -> PlayerSnap {
         let team = self.team_ref(side);
-        crate::shared::snap_from_squad(&team.players, &self.sent_off, preferred, rng)
-            .unwrap_or_else(PlayerSnap::nobody)
+        let mut snap =
+            crate::shared::snap_from_squad(&team.players, &self.sent_off, preferred, rng)
+                .unwrap_or_else(PlayerSnap::nobody);
+        // The side's mood this minute (its talk, its captain) is part of each player's.
+        snap.morale_factor *= self.side_mentality(side);
+        snap
     }
 
     pub(super) fn snap_player_by_id(&self, player_id: &str, side: Side) -> PlayerSnap {
         let team = self.team_ref(side);
-        team.players
+        let mut snap = team
+            .players
             .iter()
             .find(|player| player.id == player_id)
             .or_else(|| team.players.first())
             .map(PlayerSnap::from)
-            .unwrap_or_else(PlayerSnap::nobody)
+            .unwrap_or_else(PlayerSnap::nobody);
+        snap.morale_factor *= self.side_mentality(side);
+        snap
     }
 
     /// Who stands in goal for `side` right now: its goalkeeper, or with none left on the pitch
@@ -98,7 +110,7 @@ impl LiveMatchState {
     }
 
     pub(super) fn pick_goalkeeper(&self, side: Side) -> PlayerSnap {
-        match self.goalkeeper_in_goal(side) {
+        let mut snap = match self.goalkeeper_in_goal(side) {
             Some(keeper) if keeper.position == Position::Goalkeeper => PlayerSnap::from(keeper),
             Some(outfielder) => PlayerSnap::playing_in(outfielder, Position::Goalkeeper),
             // Everyone is sent off, or there is nobody at all. `create_live_match`
@@ -111,7 +123,9 @@ impl LiveMatchState {
                 .first()
                 .map(|p| PlayerSnap::playing_in(p, Position::Goalkeeper))
                 .unwrap_or_else(PlayerSnap::nobody),
-        }
+        };
+        snap.morale_factor *= self.side_mentality(side);
+        snap
     }
 
     // -----------------------------------------------------------------------

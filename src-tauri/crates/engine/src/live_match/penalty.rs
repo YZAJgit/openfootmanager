@@ -5,6 +5,7 @@ use rand::{Rng, RngExt};
 use crate::event::{EventType, MatchEvent};
 use crate::shared::PlayerSnap;
 use crate::types::{PlayerData, Position, Side, Zone};
+use crate::xg::{ShotBodyPart, ShotOutcome, ShotRecord};
 
 use super::{
     LiveMatchState, MatchPhase, MinuteResult, PenaltyShootoutState, ShootoutOrderSnapshot,
@@ -276,8 +277,22 @@ impl LiveMatchState {
         let gk_skill = (gk.positioning as f64 + gk.decisions as f64) / 2.0;
         let conversion = (0.75 + (shoot_skill - gk_skill) / 300.0).clamp(0.55, 0.92);
         let zone = Zone::attacking_box(att_side);
+        let scored = rng.random_range(0.0..1.0f64) < conversion;
+        self.record_shot(ShotRecord {
+            minute,
+            side: att_side,
+            shooter_id: &taker.id,
+            body_part: ShotBodyPart::Penalty,
+            outcome: if scored {
+                ShotOutcome::Goal
+            } else {
+                ShotOutcome::Saved
+            },
+            assisted_by: None,
+            sharpness: (shoot_skill / 100.0) as f32,
+        });
 
-        if rng.random_range(0.0..1.0f64) < conversion {
+        if scored {
             // PenaltyGoal intentionally carries no EventDetail::Goal context: penalty
             // commentary uses its own base key (match.commentary.PenaltyGoal) with no
             // opener/equaliser/... sub-variants. Brace/hat-trick is still detected on

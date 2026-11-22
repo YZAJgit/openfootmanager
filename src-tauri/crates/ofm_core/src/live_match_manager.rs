@@ -5,6 +5,7 @@
 // one answer to "who is playing" rather than one per code path.
 use crate::custom_tactics::INVALID_FORMATION_ERROR;
 use crate::player_rating::{formation_slots, parse_formation};
+use crate::turn::match_modifiers::{fold_match_modifiers, occasion_for};
 use crate::turn::matchday_lookups::MatchdayLookups;
 pub use crate::turn::squad::auto_select_set_pieces;
 use crate::turn::squad::{
@@ -30,6 +31,20 @@ use engine::{
 };
 
 const LIVE_MATCH_NO_LEAGUE_ERROR: &str = "be.error.liveMatch.noLeague";
+
+/// The engine's tone for a team talk the screen names (`application::team_talk`): the morale
+/// a talk moves is the club's, and this is what the match plays from it. A tone the screen does
+/// not send reads as none.
+pub fn team_talk_tone(tone: &str) -> Option<engine::TeamTalkTone> {
+    match tone {
+        "calm" => Some(engine::TeamTalkTone::Calm),
+        "motivational" => Some(engine::TeamTalkTone::Encourage),
+        "assertive" | "disappointed" => Some(engine::TeamTalkTone::DemandMore),
+        "aggressive" => Some(engine::TeamTalkTone::FireUp),
+        "praise" => Some(engine::TeamTalkTone::Praise),
+        _ => None,
+    }
+}
 
 /// Upper bound on minutes a single match can run: 120 of extra time plus generous stoppage.
 /// Used only to keep a caller-supplied step count from over-reserving.
@@ -66,6 +81,16 @@ fn resolve_match_role_assignment(
     fallback_id
 }
 
+/// The vice-captain a side named, unless he is also its captain. He leads only once the captain
+/// has left, so he may start on the bench and lead after coming on: the engine checks he is on the
+/// pitch when it asks. None is chosen for a side that named none.
+fn named_vice_captain(match_roles: &MatchRoles) -> Option<String> {
+    match_roles
+        .vice_captain
+        .clone()
+        .filter(|vice| match_roles.captain.as_ref() != Some(vice))
+}
+
 fn apply_saved_match_roles(
     match_state: &mut LiveMatchState,
     side: Side,
@@ -85,6 +110,10 @@ fn apply_saved_match_roles(
         resolve_match_role_assignment(&match_roles.captain, &starter_id_set, auto_captain)
     {
         let _ = match_state.apply_command(MatchCommand::SetCaptain { side, player_id });
+    }
+
+    if let Some(player_id) = named_vice_captain(match_roles) {
+        let _ = match_state.apply_command(MatchCommand::SetViceCaptain { side, player_id });
     }
 
     if let Some(player_id) =
@@ -177,6 +206,9 @@ pub struct LiveMatchSession {
     saved_roles: HashMap<String, DomainPlayerRole>,
     /// The role intended for each player, including a session choice temporarily suppressed by a slot.
     intended_roles: HashMap<String, engine::PlayerRole>,
+    /// Each player's character, cohesion and familiarity modifier, folded into his morale factor
+    /// at kick-off (`turn::match_modifiers`), so a refit of his morale keeps it.
+    match_modifiers: HashMap<String, f64>,
 }
 
 impl LiveMatchSession {
@@ -424,10 +456,27 @@ impl LiveMatchSession {
         morales
             .iter()
             .filter(|(player_id, morale)| {
-                self.match_state
-                    .set_morale_factor(side, player_id, morale_factor(*morale))
+                let modifier = self.match_modifiers.get(player_id).copied().unwrap_or(1.0);
+                self.match_state.set_morale_factor(
+                    side,
+                    player_id,
+                    morale_factor(*morale) * modifier,
+                )
             })
             .count()
+    }
+
+    /// The manager's team talk, by the tone the screen names it (`team_talk_tone`), given to the
+    /// user's side from this minute on. Whether the match took it: an unknown tone, or a session
+    /// with no user side (a match nobody manages), changes nothing, as the morale side of a talk
+    /// (`application::team_talk`) does not refuse one either.
+    pub fn apply_team_talk(&mut self, tone: &str) -> bool {
+        let (Some(side), Some(tone)) = (self.user_side, team_talk_tone(tone)) else {
+            return false;
+        };
+        self.match_state
+            .apply_command(MatchCommand::ApplyTeamTalk { side, tone })
+            .is_ok()
     }
 
     /// Apply the intended role only while the player's current slot admits it.
@@ -916,10 +965,32 @@ fn create_live_match_with(
         .chain(&away_club)
         .map(|player| (player.id.clone(), (*player).clone()))
         .collect();
-    let (home_xi, home_bench) =
+    let (mut home_xi, mut home_bench) =
         build_team_with_bench_from(game, &home_team_id, &home_club, lookups);
-    let (away_xi, away_bench) =
+    let (mut away_xi, mut away_bench) =
         build_team_with_bench_from(game, &away_team_id, &away_club, lookups);
+    let mut match_modifiers = HashMap::new();
+    for (team_id, side, club) in [
+        (
+            &home_team_id,
+            (&mut home_xi, &mut home_bench[..]),
+            &home_club,
+        ),
+        (
+            &away_team_id,
+            (&mut away_xi, &mut away_bench[..]),
+            &away_club,
+        ),
+    ] {
+        let team = game.teams.iter().find(|team| &team.id == team_id);
+        match_modifiers.extend(fold_match_modifiers(
+            (&game.pair_chemistry, game.seed),
+            team,
+            occasion_for(fixture, team),
+            side,
+            club,
+        ));
+    }
     let home_starter_ids = starter_ids(&home_xi);
     let away_starter_ids = starter_ids(&away_xi);
     let home_auto_selection = set_piece_takers_among(&starters_among(&home_xi, &home_club));
@@ -997,6 +1068,7 @@ fn create_live_match_with(
         squad_players,
         saved_roles,
         intended_roles,
+        match_modifiers,
     })
 }
 
@@ -1418,6 +1490,57 @@ mod tests {
         assert!(!slot.admits_role(&domain::team::PlayerRole::BoxToBox));
         assert_eq!(team.players[index].role, PlayerRole::Standard);
         assert!(slot.admits_role(&domain::team::PlayerRole::Standard));
+    }
+
+    /// Given a side that named a vice-captain, one that named its captain again, and one that
+    /// named none
+    /// When the vice-captain handed to the match is read
+    /// Then only the first hands one over
+    #[test]
+    fn a_named_vice_captain_is_handed_to_the_match_unless_he_is_the_captain() {
+        let roles = |captain: Option<&str>, vice: Option<&str>| domain::team::MatchRoles {
+            captain: captain.map(str::to_string),
+            vice_captain: vice.map(str::to_string),
+            ..domain::team::MatchRoles::default()
+        };
+        assert_eq!(
+            super::named_vice_captain(&roles(Some("c"), Some("v"))).as_deref(),
+            Some("v")
+        );
+        assert_eq!(
+            super::named_vice_captain(&roles(Some("c"), Some("c"))),
+            None
+        );
+        assert_eq!(super::named_vice_captain(&roles(Some("c"), None)), None);
+    }
+
+    /// Given every tone the team-talk screen sends, and one it does not
+    /// When each is read as the match's tone
+    /// Then each sent tone is one the engine plays, and the unknown one is none
+    #[test]
+    fn every_team_talk_tone_the_screen_sends_is_one_the_match_plays() {
+        use engine::TeamTalkTone as Tone;
+        for (sent, played) in [
+            ("calm", Tone::Calm),
+            ("motivational", Tone::Encourage),
+            ("assertive", Tone::DemandMore),
+            ("disappointed", Tone::DemandMore),
+            ("aggressive", Tone::FireUp),
+            ("praise", Tone::Praise),
+        ] {
+            assert_eq!(super::team_talk_tone(sent), Some(played), "{sent}");
+        }
+        assert_eq!(super::team_talk_tone("shout"), None);
+    }
+
+    /// Given a match at half-time with the user's side at home
+    /// When the manager gives a known talk, then one the match does not know
+    /// Then the match takes the first and not the second
+    #[test]
+    fn the_users_team_talk_reaches_the_match() {
+        let mut session = at_half_time();
+        assert!(session.apply_team_talk("motivational"));
+        assert!(!session.apply_team_talk("shout"));
     }
 
     /// A match stepped to half-time, with the user's side the home side (`user_side`).

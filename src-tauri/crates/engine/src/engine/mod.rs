@@ -1,12 +1,15 @@
+mod extras_play;
 mod fouls;
 mod resolution;
 
 use rand::{Rng, RngExt};
 
 use crate::event::{EventType, MatchEvent};
+use crate::extras::{PendingSetPiece, TeamExtras};
 use crate::report::MatchReport;
 use crate::shared::{self, PlayerSnap};
 use crate::types::{MatchConfig, Position, Side, TeamData, Zone};
+use crate::xg::ShotMapEntry;
 
 // ---------------------------------------------------------------------------
 // MatchEngine — the core minute-by-minute simulator
@@ -25,6 +28,20 @@ pub fn simulate_with_rng<R: Rng>(
     config: &MatchConfig,
     rng: &mut R,
 ) -> MatchReport {
+    let nothing_set = TeamExtras::default();
+    simulate_with_extras(home, away, config, &nothing_set, &nothing_set, rng)
+}
+
+/// Simulate with each side's captaincy, set-piece takers and team talk. With
+/// `TeamExtras::default()` for both it is `simulate_with_rng`, draw for draw.
+pub fn simulate_with_extras<R: Rng>(
+    home: &TeamData,
+    away: &TeamData,
+    config: &MatchConfig,
+    home_extras: &TeamExtras,
+    away_extras: &TeamExtras,
+    rng: &mut R,
+) -> MatchReport {
     // A side with nobody on its books cannot play. Refusing here keeps every
     // player lookup below total: there is always someone to pick.
     if home.players.is_empty() || away.players.is_empty() {
@@ -32,6 +49,8 @@ pub fn simulate_with_rng<R: Rng>(
     }
 
     let mut ctx = MatchContext::new(home, away, config);
+    ctx.home_extras = home_extras;
+    ctx.away_extras = away_extras;
 
     // Kick-off
     ctx.emit(MatchEvent::new(
@@ -89,7 +108,7 @@ pub fn simulate_with_rng<R: Rng>(
         .collect();
 
     let mut report = MatchReport::from_events_with_players(
-        ctx.events,
+        std::mem::take(&mut ctx.events),
         ctx.home_possession_ticks,
         ctx.away_possession_ticks,
         total_minutes,
@@ -99,8 +118,21 @@ pub fn simulate_with_rng<R: Rng>(
         &home.players.iter().collect::<Vec<_>>(),
         &away.players.iter().collect::<Vec<_>>(),
     );
+    report.attach_shot_map(ctx.shots);
     report
 }
+
+/// What a side brings when nothing has been set for it.
+static NOTHING_SET: TeamExtras = TeamExtras {
+    set_pieces: crate::live_match::SetPieceTakers {
+        free_kick_taker: None,
+        corner_taker: None,
+        penalty_taker: None,
+        captain: None,
+        vice_captain: None,
+    },
+    talk: crate::types::TeamTalkTone::Neutral,
+};
 
 // ---------------------------------------------------------------------------
 // Internal context carried through the simulation
@@ -122,6 +154,15 @@ pub(crate) struct MatchContext<'a> {
     /// Team-level condition scalar (0.0–1.0). Starts from mean player condition, depletes per minute.
     pub(crate) home_condition: f64,
     pub(crate) away_condition: f64,
+    /// Each side's captaincy, set-piece takers and team talk.
+    pub(crate) home_extras: &'a TeamExtras,
+    pub(crate) away_extras: &'a TeamExtras,
+    /// The minute being played.
+    pub(crate) minute: u8,
+    /// A set piece put into the box, waiting for the shot it makes.
+    pub(crate) pending_set_piece: Option<PendingSetPiece>,
+    /// The shot map: every shot of the match.
+    pub(crate) shots: Vec<ShotMapEntry>,
 }
 
 fn team_avg_condition(team: &TeamData) -> f64 {
@@ -149,6 +190,11 @@ impl<'a> MatchContext<'a> {
             sent_off: std::collections::HashSet::new(),
             home_condition: team_avg_condition(home),
             away_condition: team_avg_condition(away),
+            home_extras: &NOTHING_SET,
+            away_extras: &NOTHING_SET,
+            minute: 0,
+            pending_set_piece: None,
+            shots: Vec::new(),
         }
     }
 
@@ -196,9 +242,14 @@ fn simulate_minute<R: Rng>(ctx: &mut MatchContext, minute: u8, rng: &mut R) {
 
     // Deplete team condition ~0.18 over 90 minutes (floor at 0.70, but never increase
     // if condition is already below 0.70 at match start).
+    ctx.minute = minute;
     let depletion = ctx.config.fatigue_per_minute / 100.0;
-    ctx.home_condition = (ctx.home_condition - depletion).max(0.70_f64.min(ctx.home_condition));
-    ctx.away_condition = (ctx.away_condition - depletion).max(0.70_f64.min(ctx.away_condition));
+    let home_depletion = depletion * ctx.talk_effect(Side::Home).fatigue;
+    let away_depletion = depletion * ctx.talk_effect(Side::Away).fatigue;
+    ctx.home_condition =
+        (ctx.home_condition - home_depletion).max(0.70_f64.min(ctx.home_condition));
+    ctx.away_condition =
+        (ctx.away_condition - away_depletion).max(0.70_f64.min(ctx.away_condition));
 
     let actions = rng.random_range(1..=3u8);
     for _ in 0..actions {

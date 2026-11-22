@@ -236,7 +236,7 @@ fn give_team_talk_at(
         .and_then(|talk| talk);
     match talk {
         Ok(changes) => {
-            hand_morale_to_the_match(state, career, &changes);
+            hand_morale_to_the_match(state, career, tone, &changes);
             Ok(TeamTalkOutcome {
                 context: moment.context,
                 changes,
@@ -250,10 +250,16 @@ fn give_team_talk_at(
 }
 
 /// A talk's change of mood reaches the match in play: each player the talk moved plays the rest
-/// of it at the factor his new morale gives (`LiveMatchSession::refit_morale`). The game's lock
-/// is released by now and the session's is taken on its own, never both at once. A match of
+/// of it at the factor his new morale gives (`LiveMatchSession::refit_morale`), and the chosen
+/// tone also applies inside the match engine (`LiveMatchSession::apply_team_talk`). The game's
+/// lock is released by now and the session's is taken on its own, never both at once. A match of
 /// another career, or none (the talk after a match that is over), takes nothing.
-fn hand_morale_to_the_match(state: &StateManager, career: Career, changes: &[serde_json::Value]) {
+fn hand_morale_to_the_match(
+    state: &StateManager,
+    career: Career,
+    tone: &str,
+    changes: &[serde_json::Value],
+) {
     let morales: Vec<(String, u8)> = changes
         .iter()
         .filter_map(|change| {
@@ -265,6 +271,7 @@ fn hand_morale_to_the_match(state: &StateManager, career: Career, changes: &[ser
     state.with_live_match(|session| {
         if career.check_token(session.career_token).is_ok() {
             session.refit_morale(&morales);
+            session.apply_team_talk(tone);
         }
     });
 }

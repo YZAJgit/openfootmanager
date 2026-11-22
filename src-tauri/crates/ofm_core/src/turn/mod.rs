@@ -3,6 +3,7 @@ pub(crate) mod cup_renewal;
 mod cup_round_summary;
 mod dormant;
 mod match_injuries;
+pub(crate) mod match_modifiers;
 pub(crate) mod matchday_lookups;
 mod news;
 mod post_match;
@@ -523,9 +524,15 @@ pub fn simulate_other_matches_with_capture<F>(
     // What a match asks of the whole world is asked once for the competition-day; the lookups are
     // told when a match changed what they hold.
     let mut lookups = matchday_lookups::MatchdayLookups::of(game);
+    let played_any = !fixture_indices.is_empty();
     for idx in fixture_indices {
         simulate_single_match_with_capture(game, idx, Some(&mut lookups), on_capture);
         lookups.after_match_applied(game);
+    }
+    // Once a matchday, the understanding of players who are no longer team-mates goes: the
+    // pairs would otherwise grow with every transfer the world makes.
+    if played_any {
+        crate::chemistry::retain_team_mates(&mut game.pair_chemistry, &game.players);
     }
 }
 

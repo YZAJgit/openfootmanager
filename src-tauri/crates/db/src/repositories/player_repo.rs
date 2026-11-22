@@ -41,6 +41,10 @@ pub fn upsert_player(conn: &Connection, p: &Player) -> Result<(), String> {
         .map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
     let media_json =
         serde_json::to_string(&p.media).map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
+    let character_json = serde_json::to_string(&p.character)
+        .map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
+    let academy_json =
+        serde_json::to_string(&p.academy).map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
     let position_str = format!("{:?}", p.position);
     let natural_position_str = format!("{:?}", p.natural_position);
     let alt_positions_json = serde_json::to_string(&p.alternate_positions)
@@ -56,8 +60,10 @@ pub fn upsert_player(conn: &Connection, p: &Player) -> Result<(), String> {
           transfer_listed, loan_listed, transfer_offers, alternate_positions,
           natural_position, training_focus, morale_core, footedness, weak_foot, fitness, squad_role,
           ovr, potential, media_json, jersey_number, loan_offers, active_loan, movement_history,
-          contract_start, league_stats_by_competition, season_stints)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41)
+          contract_start, league_stats_by_competition, season_stints,
+          release_clause, loan_recallable, loan_guaranteed_minutes_pct, character_json,
+          academy_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46)
          ON CONFLICT(id) DO UPDATE SET
            match_name = excluded.match_name,
            full_name = excluded.full_name,
@@ -98,7 +104,12 @@ pub fn upsert_player(conn: &Connection, p: &Player) -> Result<(), String> {
            active_loan = excluded.active_loan,
            movement_history = excluded.movement_history,
            league_stats_by_competition = excluded.league_stats_by_competition,
-           season_stints = excluded.season_stints",
+           season_stints = excluded.season_stints,
+           release_clause = excluded.release_clause,
+           loan_recallable = excluded.loan_recallable,
+           loan_guaranteed_minutes_pct = excluded.loan_guaranteed_minutes_pct,
+           character_json = excluded.character_json,
+           academy_json = excluded.academy_json",
         params![
             p.id,
             p.match_name,
@@ -141,6 +152,11 @@ pub fn upsert_player(conn: &Connection, p: &Player) -> Result<(), String> {
             p.contract_start(),
             league_stats_by_competition_json,
             season_stints_json,
+            p.release_clause,
+            i32::from(p.loan_recallable),
+            p.loan_guaranteed_minutes_pct.map(i64::from),
+            character_json,
+            academy_json,
         ],
     )
     .map_err(|error| {
@@ -278,7 +294,9 @@ pub fn load_all_players(conn: &Connection) -> Result<Vec<Player>, String> {
                     COALESCE(loan_offers, '[]'), active_loan,
                     COALESCE(movement_history, '[]'),
                     contract_start, COALESCE(league_stats_by_competition, '{}'),
-                    COALESCE(season_stints, '{}')
+                    COALESCE(season_stints, '{}'),
+                    release_clause, COALESCE(loan_recallable, 0), loan_guaranteed_minutes_pct,
+                    COALESCE(character_json, '{}'), COALESCE(academy_json, '{}')
              FROM players",
         )
         .map_err(|_| GAME_PERSISTENCE_LOAD_ERROR.to_string())?;
@@ -307,7 +325,9 @@ pub fn load_players_by_team(conn: &Connection, team_id: &str) -> Result<Vec<Play
                     COALESCE(loan_offers, '[]'), active_loan,
                     COALESCE(movement_history, '[]'),
                     contract_start, COALESCE(league_stats_by_competition, '{}'),
-                    COALESCE(season_stints, '{}')
+                    COALESCE(season_stints, '{}'),
+                    release_clause, COALESCE(loan_recallable, 0), loan_guaranteed_minutes_pct,
+                    COALESCE(character_json, '{}'), COALESCE(academy_json, '{}')
              FROM players WHERE team_id = ?1",
         )
         .map_err(|_| GAME_PERSISTENCE_LOAD_ERROR.to_string())?;
@@ -371,6 +391,15 @@ fn row_to_player(conn: &Connection, row: &rusqlite::Row) -> rusqlite::Result<Pla
     let transfer_listed_int: i32 = row.get(20)?;
     let loan_listed_int: i32 = row.get(21)?;
     let market_value_i64: i64 = row.get(17)?;
+    let release_clause: Option<i64> = row.get(41)?;
+    let loan_recallable: i32 = row.get(42)?;
+    let loan_guaranteed_minutes_pct: Option<u8> = row
+        .get::<_, Option<i64>>(43)?
+        .and_then(|pct| u8::try_from(pct).ok())
+        .filter(|pct| *pct <= 100);
+    // NULL (a row written before v069) reads as '{}': every trait neutral.
+    let character_json: String = row.get(44)?;
+    let academy_json: String = row.get(45)?;
 
     let position = parse_position(&position_str);
     let natural_position = if natural_position_str.is_empty() {
@@ -462,8 +491,22 @@ fn row_to_player(conn: &Connection, row: &rusqlite::Row) -> rusqlite::Result<Pla
             cell("active_loan"),
             active_loan_json.as_deref(),
         ),
+        release_clause,
+        loan_recallable: loan_recallable != 0,
+        loan_guaranteed_minutes_pct,
         morale_core: json_column::read(conn, cell("morale_core"), &morale_core_json),
         jersey_number,
+        character: json_column::read::<domain::character::CharacterProfile>(
+            conn,
+            cell("character_json"),
+            &character_json,
+        )
+        .clamped(),
+        academy: json_column::read::<domain::player::AcademyRecord>(
+            conn,
+            cell("academy_json"),
+            &academy_json,
+        ),
     };
     // The flat contract fields are derived from the ledger, so a save from before
     // the ledger needs its one entry made before anything reads them.
@@ -675,6 +718,30 @@ mod tests {
         p.stage_wage(5000);
         p.market_value = 500_000;
         p
+    }
+
+    /// Given a scholar with an academy start, decision deadline and pre-21 training spell
+    /// When the player is saved and loaded
+    /// Then every v070 academy field survives, while a NULL legacy row reads as no academy record.
+    #[test]
+    fn youth_academy_record_v070_survives_save_and_load() {
+        let db = test_db();
+        let mut player = sample_player("p-academy", Some("team-001"));
+        player.academy.joined_on = Some("2024-08-01".to_string());
+        player.academy.scholarship_deadline = Some("2026-08-31".to_string());
+        player
+            .academy
+            .training_spells
+            .push(domain::player::TrainingSpell {
+                club_id: "team-001".to_string(),
+                football_nation: "ENG".to_string(),
+                started_on: "2022-08-01".to_string(),
+                ended_on: Some("2025-06-30".to_string()),
+            });
+        upsert_player(db.conn(), &player).unwrap();
+
+        let loaded = load_all_players(db.conn()).unwrap().remove(0);
+        assert_eq!(loaded.academy, player.academy);
     }
 
     #[test]
@@ -1011,6 +1078,79 @@ mod tests {
         let loaded = load_all_players(db.conn()).unwrap();
 
         assert_eq!(loaded[0].squad_role, SquadRole::Youth);
+    }
+
+    /// Given a player with a non-neutral character, and one whose row predates v069 (NULL column)
+    /// When both are saved, the first saved again (the update path), and loaded by club and in full
+    /// Then the assessed character survives every trait, and the old row reads as neutral
+    #[test]
+    fn a_players_character_survives_save_and_load() {
+        let db = test_db();
+        let mut player = sample_player("p-char", Some("team-001"));
+        player.character = domain::character::CharacterProfile {
+            professionalism: 91,
+            ambition: 12,
+            loyalty: 77,
+            consistency: 33,
+            big_matches: 88,
+            pressure_handling: 64,
+            injury_proneness: 5,
+            adaptability: 99,
+        };
+        let legacy = sample_player("p-legacy", Some("team-001"));
+        upsert_player(db.conn(), &player).unwrap();
+        upsert_player(db.conn(), &legacy).unwrap();
+        player.character.loyalty = 78;
+        upsert_player(db.conn(), &player).unwrap();
+        db.conn()
+            .execute(
+                "UPDATE players SET character_json = NULL WHERE id = 'p-legacy'",
+                [],
+            )
+            .unwrap();
+
+        for loaded in [
+            load_all_players(db.conn()).unwrap(),
+            load_players_by_team(db.conn(), "team-001").unwrap(),
+        ] {
+            let stored = loaded.iter().find(|p| p.id == "p-char").unwrap();
+            assert_eq!(stored.character, player.character);
+            let old = loaded.iter().find(|p| p.id == "p-legacy").unwrap();
+            assert!(old.character.is_unassessed());
+        }
+        assert!(kept_cells(db.conn()).is_empty());
+    }
+
+    /// Given a player with a release clause on a recallable loan with promised minutes
+    /// When he is saved, saved again (the update path) and loaded, both by club and in full
+    /// Then the three v068 columns survive; a player without them loads with none.
+    #[test]
+    fn test_release_clause_and_loan_terms_roundtrip() {
+        let db = test_db();
+        let mut player = sample_player("p-clause", Some("team-001"));
+        player.release_clause = Some(42_000_000);
+        player.loan_recallable = true;
+        player.loan_guaranteed_minutes_pct = Some(65);
+        let plain = sample_player("p-plain", Some("team-001"));
+
+        upsert_player(db.conn(), &player).unwrap();
+        upsert_player(db.conn(), &plain).unwrap();
+        player.release_clause = Some(45_000_000);
+        upsert_player(db.conn(), &player).unwrap();
+
+        for loaded in [
+            load_all_players(db.conn()).unwrap(),
+            load_players_by_team(db.conn(), "team-001").unwrap(),
+        ] {
+            let stored = loaded.iter().find(|p| p.id == "p-clause").unwrap();
+            assert_eq!(stored.release_clause, Some(45_000_000));
+            assert!(stored.loan_recallable);
+            assert_eq!(stored.loan_guaranteed_minutes_pct, Some(65));
+            let other = loaded.iter().find(|p| p.id == "p-plain").unwrap();
+            assert_eq!(other.release_clause, None);
+            assert!(!other.loan_recallable);
+            assert_eq!(other.loan_guaranteed_minutes_pct, None);
+        }
     }
 
     #[test]

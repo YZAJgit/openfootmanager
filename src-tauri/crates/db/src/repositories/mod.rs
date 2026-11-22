@@ -1,8 +1,10 @@
 pub mod archived_message_repo;
+pub(crate) mod chemistry_repo;
 pub mod competition_repo;
 pub mod custom_tactic_repo;
 pub mod edition_archive_repo;
 mod fixture_competition;
+pub(crate) mod installment_repo;
 pub(crate) mod journal_repo;
 pub mod league_repo;
 pub mod manager_repo;

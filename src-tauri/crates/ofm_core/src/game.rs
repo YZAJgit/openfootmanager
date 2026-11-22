@@ -246,6 +246,21 @@ pub struct Game {
     #[serde(default)]
     pub legacy_world_cup_draw: bool,
 
+    /// Transfer-fee tranches still owed or already paid, in the order they were scheduled.
+    /// Weekly settlement (`finances::installments`) posts each one through the cash journal
+    /// once it falls due. Saved in its own SQLite table (v068); kept out of IPC JSON and generated
+    /// wire types until a screen reads it.
+    #[serde(default, skip_serializing)]
+    #[ts(skip)]
+    pub transfer_installments: Vec<domain::finance::TransferInstallment>,
+
+    /// The on-pitch understanding between every pair of team-mates who have played together
+    /// (`chemistry`), in canonical pair order. Saved in its own SQLite table (v069); kept out of
+    /// IPC JSON and generated wire types until a screen reads it.
+    #[serde(default, skip_serializing)]
+    #[ts(skip)]
+    pub pair_chemistry: Vec<domain::character::PairChemistry>,
+
     /// Append-only cash journal. `Clone` is a pointer bump; `post` copy-on-writes.
     /// Skipped on IPC serde. Persistence is incremental SQL, not Game JSON.
     #[serde(skip)]
@@ -339,6 +354,8 @@ impl Game {
             package_lockfile: vec![],
             seed: 0,
             legacy_world_cup_draw: false,
+            transfer_installments: Vec::new(),
+            pair_chemistry: Vec::new(),
             cash_journal: CashJournal::default(),
             cash_journal_dirty_ids: Vec::new(),
             squad_floor_top_ups: Vec::new(),
@@ -612,6 +629,29 @@ mod tests {
             &["team1".to_string(), "team2".to_string()],
         ));
         game
+    }
+
+    #[test]
+    fn sql_backed_match_state_is_not_sent_in_game_json() {
+        let mut game = game_with_only_a_legacy_league();
+        game.transfer_installments
+            .push(domain::finance::TransferInstallment {
+                id: "installment".to_string(),
+                buyer_team_id: "buyer".to_string(),
+                seller_team_id: "seller".to_string(),
+                player_id: "player".to_string(),
+                amount: 100,
+                due_date: "2026-11-22".to_string(),
+                settled: false,
+                created_date: "2026-11-01".to_string(),
+            });
+        game.pair_chemistry
+            .push(domain::character::PairChemistry::new("a", "b", 90, 5));
+
+        let json = serde_json::to_value(&game).unwrap();
+
+        assert!(json.get("transfer_installments").is_none());
+        assert!(json.get("pair_chemistry").is_none());
     }
 
     #[test]

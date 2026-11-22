@@ -247,6 +247,8 @@ mod tests {
             name: "Core".to_string(),
             focus: domain::team::TrainingFocus::Tactical,
             player_ids: vec!["older-pro".to_string()],
+            intensity: None,
+            mentor_id: None,
         }];
         game.teams[0].match_roles.captain = Some("older-pro".to_string());
         let current_date = game.clock.current_date.date_naive();

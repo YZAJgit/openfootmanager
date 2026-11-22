@@ -14,10 +14,10 @@ use ofm_core::game::{
 
 use crate::game_database::GameDatabase;
 use crate::repositories::{
-    archived_message_repo, competition_repo, custom_tactic_repo, edition_archive_repo,
-    journal_repo, league_repo, manager_repo, message_repo, meta_repo, national_team_repo,
-    news_repo, objective_repo, player_repo, retired_manager_repo, retired_player_repo,
-    scouting_repo, staff_repo, stats_repo, team_repo,
+    archived_message_repo, chemistry_repo, competition_repo, custom_tactic_repo,
+    edition_archive_repo, installment_repo, journal_repo, league_repo, manager_repo, message_repo,
+    meta_repo, national_team_repo, news_repo, objective_repo, player_repo, retired_manager_repo,
+    retired_player_repo, scouting_repo, staff_repo, stats_repo, team_repo,
 };
 
 pub struct GamePersistenceWriter;
@@ -155,6 +155,8 @@ fn write_game_to_connection(
     }
     team_repo::upsert_teams(conn, &game.teams)?;
     journal_repo::persist_cash_journal(conn, game)?;
+    installment_repo::replace_transfer_installments(conn, &game.transfer_installments)?;
+    chemistry_repo::replace_pair_chemistry(conn, &game.pair_chemistry)?;
     // Retirees first: archiving one deletes his row from `players`, and until then that row
     // still holds his club's shirt. A newcomer given the number he left would collide with it
     // on the club's unique shirt index, and the whole save would fail (#1004).
@@ -465,6 +467,8 @@ impl GamePersistenceReader {
                 serde_json::from_str(&meta.package_lockfile_json)
                     .map_err(|_| "be.error.gamePersistence.loadFailed".to_string())?
             },
+            transfer_installments: installment_repo::load_transfer_installments(conn)?,
+            pair_chemistry: chemistry_repo::load_pair_chemistry(conn)?,
             cash_journal: domain::finance::CashJournal::from_vec(journal_repo::load_cash_journal(
                 conn,
             )?),

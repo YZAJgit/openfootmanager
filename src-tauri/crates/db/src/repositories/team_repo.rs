@@ -1,7 +1,8 @@
 use crate::json_column::{self, Cell};
 use domain::team::{
-    Facilities, FinancialTransaction, PlayStyle, PlayerRole, Sponsorship, TacticsPhaseSettings,
-    Team, TeamColors, TeamMedia, TrainingFocus, TrainingIntensity, TrainingSchedule,
+    AcademyTier, Facilities, FinancialTransaction, PlayStyle, PlayerRole, Sponsorship,
+    TacticsPhaseSettings, Team, TeamColors, TeamMedia, TrainingFocus, TrainingIntensity,
+    TrainingSchedule,
 };
 use rusqlite::{Connection, params};
 
@@ -32,6 +33,8 @@ pub fn upsert_team(conn: &Connection, t: &Team) -> Result<(), String> {
         .map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
     let tactics_phase_json = serde_json::to_string(&t.tactics_phase)
         .map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
+    let tactical_familiarity_json = serde_json::to_string(&t.tactical_familiarity)
+        .map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
     let play_style_str = format!("{:?}", t.play_style);
     let kit_pattern_str = t.kit_pattern.to_string();
     let training_focus_str = format!("{:?}", t.training_focus);
@@ -46,8 +49,8 @@ pub fn upsert_team(conn: &Connection, t: &Team) -> Result<(), String> {
          training_focus, training_intensity, training_schedule,
          founded_year, colors_primary, colors_secondary,
          starting_xi_ids, match_roles, form, history, training_groups, financial_ledger, sponsorship, facilities, media_json, kit_pattern,
-         player_roles_json, tactics_phase_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35)",
+         player_roles_json, tactics_phase_json, tactical_familiarity_json, academy_tier)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37)",
         params![
             t.id,
             t.name,
@@ -84,6 +87,8 @@ pub fn upsert_team(conn: &Connection, t: &Team) -> Result<(), String> {
             kit_pattern_str,
             player_roles_json,
             tactics_phase_json,
+            tactical_familiarity_json,
+            academy_tier_int(t.academy_tier),
         ],
     )
     .map_err(|_| GAME_PERSISTENCE_WRITE_ERROR.to_string())?;
@@ -157,6 +162,10 @@ fn row_to_team(conn: &Connection, row: &rusqlite::Row) -> rusqlite::Result<Team>
     let kit_pattern_str: String = row.get::<_, String>(32)?;
     let player_roles_json: String = row.get(33).unwrap_or_else(|_| "{}".to_string());
     let tactics_phase_json: String = row.get(34).unwrap_or_else(|_| "{}".to_string());
+    // NULL (a row written before v069) reads as '{}': a side that has not yet built familiarity.
+    let tactical_familiarity_json: String = row.get(35)?;
+    // NULL (a row written before v070) reads as Category Three, the unclassified academy.
+    let academy_tier_int: Option<i64> = row.get(36)?;
 
     Ok(Team {
         id: id.clone(),
@@ -213,7 +222,50 @@ fn row_to_team(conn: &Connection, row: &rusqlite::Row) -> rusqlite::Result<Team>
         tactics_phase: read_tactics_phase(conn, cell("tactics_phase_json"), &tactics_phase_json),
         form: json_column::read(conn, cell("form"), &form_json),
         history: json_column::read(conn, cell("history"), &history_json),
+        tactical_familiarity: read_tactical_familiarity(
+            conn,
+            cell("tactical_familiarity_json"),
+            &tactical_familiarity_json,
+        ),
+        academy_tier: academy_tier_from_int(academy_tier_int),
     })
+}
+
+/// A team's academy category as `teams.academy_tier` stores it: Category One 0 through
+/// Category Four 3, matching the EPPP numbering one step down.
+fn academy_tier_int(tier: AcademyTier) -> i64 {
+    match tier {
+        AcademyTier::CategoryOne => 0,
+        AcademyTier::CategoryTwo => 1,
+        AcademyTier::CategoryThree => 2,
+        AcademyTier::CategoryFour => 3,
+    }
+}
+
+/// The category `teams.academy_tier` holds, with NULL (a row written before v070) and any value
+/// out of range read as Category Three rather than rejected: a save must load, not fail, on a
+/// column the game itself never writes out of range.
+fn academy_tier_from_int(stored: Option<i64>) -> AcademyTier {
+    match stored {
+        Some(0) => AcademyTier::CategoryOne,
+        Some(1) => AcademyTier::CategoryTwo,
+        Some(3) => AcademyTier::CategoryFour,
+        _ => AcademyTier::CategoryThree,
+    }
+}
+
+/// A side's familiarity with its shape, held to `0..=100` whatever the cell holds.
+fn read_tactical_familiarity(
+    conn: &Connection,
+    cell: Cell<'_>,
+    text: &str,
+) -> domain::character::TeamTacticalFamiliarity {
+    let stored: domain::character::TeamTacticalFamiliarity = json_column::read(conn, cell, text);
+    domain::character::TeamTacticalFamiliarity::new(
+        stored.formation,
+        stored.familiarity,
+        stored.matches_together,
+    )
 }
 
 /// A team's role for each player, as stored: a map of player id to role. A role that does not
@@ -301,7 +353,8 @@ pub fn load_all_teams(conn: &Connection) -> Result<Vec<Team>, String> {
                     founded_year, colors_primary, colors_secondary,
                     starting_xi_ids, match_roles, form, history, training_groups, financial_ledger, sponsorship, facilities,
                     COALESCE(media_json, '{}'), COALESCE(kit_pattern, 'Solid'),
-                    COALESCE(player_roles_json, '{}'), COALESCE(tactics_phase_json, '{}')
+                    COALESCE(player_roles_json, '{}'), COALESCE(tactics_phase_json, '{}'),
+                    COALESCE(tactical_familiarity_json, '{}'), academy_tier
              FROM teams",
         )
         .map_err(|_| GAME_PERSISTENCE_LOAD_ERROR.to_string())?;
@@ -328,7 +381,8 @@ pub fn load_team(conn: &Connection, id: &str) -> Result<Option<Team>, String> {
                     founded_year, colors_primary, colors_secondary,
                     starting_xi_ids, match_roles, form, history, training_groups, financial_ledger, sponsorship, facilities,
                     COALESCE(media_json, '{}'), COALESCE(kit_pattern, 'Solid'),
-                    COALESCE(player_roles_json, '{}'), COALESCE(tactics_phase_json, '{}')
+                    COALESCE(player_roles_json, '{}'), COALESCE(tactics_phase_json, '{}'),
+                    COALESCE(tactical_familiarity_json, '{}'), academy_tier
              FROM teams WHERE id = ?1",
         )
         .map_err(|_| GAME_PERSISTENCE_LOAD_ERROR.to_string())?;
@@ -625,6 +679,60 @@ mod tests {
         );
     }
 
+    /// Given a side that knows its 4-3-3 after a dozen matches, and one whose row predates v069
+    /// When both are saved and loaded, one by id and both in full
+    /// Then the familiarity survives, and the old row reads as a side that has built none
+    #[test]
+    fn a_teams_tactical_familiarity_survives_save_and_load() {
+        let db = test_db();
+        let mut team = sample_team("team-fam", "Shape FC");
+        team.tactical_familiarity =
+            domain::character::TeamTacticalFamiliarity::new("4-3-3", 63.5, 12);
+        let legacy = sample_team("team-old", "Old FC");
+        upsert_team(db.conn(), &team).unwrap();
+        upsert_team(db.conn(), &legacy).unwrap();
+        db.conn()
+            .execute(
+                "UPDATE teams SET tactical_familiarity_json = NULL WHERE id = 'team-old'",
+                [],
+            )
+            .unwrap();
+
+        let loaded = load_team(db.conn(), "team-fam").unwrap().unwrap();
+        assert_eq!(loaded.tactical_familiarity, team.tactical_familiarity);
+        let all = load_all_teams(db.conn()).unwrap();
+        let old = all.iter().find(|t| t.id == "team-old").unwrap();
+        assert_eq!(
+            old.tactical_familiarity,
+            domain::character::TeamTacticalFamiliarity::default()
+        );
+    }
+
+    /// Given a Category One academy and a team row written before v070
+    /// When both are saved and loaded, one by id and both in full
+    /// Then the category survives and the old row reads as Category Three.
+    #[test]
+    fn youth_academy_tier_v070_survives_save_and_load() {
+        let db = test_db();
+        let mut team = sample_team("team-academy", "Academy FC");
+        team.academy_tier = domain::team::AcademyTier::CategoryOne;
+        let legacy = sample_team("team-legacy", "Legacy FC");
+        upsert_team(db.conn(), &team).unwrap();
+        upsert_team(db.conn(), &legacy).unwrap();
+        db.conn()
+            .execute(
+                "UPDATE teams SET academy_tier = NULL WHERE id = 'team-legacy'",
+                [],
+            )
+            .unwrap();
+
+        let loaded = load_team(db.conn(), "team-academy").unwrap().unwrap();
+        assert_eq!(loaded.academy_tier, domain::team::AcademyTier::CategoryOne);
+        let all = load_all_teams(db.conn()).unwrap();
+        let old = all.iter().find(|team| team.id == "team-legacy").unwrap();
+        assert_eq!(old.academy_tier, domain::team::AcademyTier::CategoryThree);
+    }
+
     #[test]
     fn test_team_training_settings_roundtrip() {
         let db = test_db();
@@ -726,12 +834,16 @@ mod tests {
                 name: "Defenders".to_string(),
                 focus: TrainingFocus::Defending,
                 player_ids: vec!["p1".to_string(), "p2".to_string()],
+                intensity: None,
+                mentor_id: None,
             },
             domain::team::TrainingGroup {
                 id: "g2".to_string(),
                 name: "Attackers".to_string(),
                 focus: TrainingFocus::Attacking,
                 player_ids: vec!["p3".to_string()],
+                intensity: None,
+                mentor_id: None,
             },
         ];
 
@@ -744,6 +856,34 @@ mod tests {
         assert_eq!(loaded.training_groups[0].player_ids.len(), 2);
         assert_eq!(loaded.training_groups[1].name, "Attackers");
         assert_eq!(loaded.training_groups[1].focus, TrainingFocus::Attacking);
+    }
+
+    /// Given a club running an individual development plan with its own intensity and a mentor
+    /// When the club is saved and read back from the existing `training_groups` JSON column
+    /// Then the plan survives with its intensity and mentor, against no new column and no
+    ///      migration
+    #[test]
+    fn an_individual_plan_survives_save_and_load_in_the_existing_group_column() {
+        let db = test_db();
+        let mut team = sample_team("team-plan", "Plan FC");
+        team.training_groups = vec![domain::team::TrainingGroup {
+            id: "individual:p1".to_string(),
+            name: "Young Player".to_string(),
+            focus: TrainingFocus::Technical,
+            player_ids: vec!["p1".to_string()],
+            intensity: Some(TrainingIntensity::High),
+            mentor_id: Some("p9".to_string()),
+        }];
+
+        upsert_team(db.conn(), &team).unwrap();
+        let loaded = load_team(db.conn(), "team-plan").unwrap().unwrap();
+
+        assert_eq!(loaded.training_groups.len(), 1);
+        let plan = &loaded.training_groups[0];
+        assert_eq!(plan.intensity, Some(TrainingIntensity::High));
+        assert_eq!(plan.mentor_id.as_deref(), Some("p9"));
+        assert_eq!(plan.player_ids, vec!["p1".to_string()]);
+        assert_eq!(loaded.training_groups, team.training_groups);
     }
 
     #[test]

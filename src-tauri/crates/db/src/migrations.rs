@@ -15,7 +15,7 @@ pub const MIGRATION_COUNT: usize = MIGRATIONS.len();
 /// **Lowering this is almost always wrong.** A save written by a release with N migrations
 /// reports `user_version = N` and expects every column those migrations added; a build with
 /// fewer can neither open it nor recreate it.
-const EXPECTED_MIGRATION_COUNT: usize = 67;
+const EXPECTED_MIGRATION_COUNT: usize = 70;
 
 // Compile-time rather than a test: adding or removing a migration should fail the build, not
 // merely turn a suite red.
@@ -204,6 +204,21 @@ const MIGRATIONS: &[(&str, &str)] = &[
     (
         "v067_player_season_stints.sql",
         include_str!("sql/v067_player_season_stints.sql"),
+    ),
+    // V68: Release clauses, recallable loans and transfer-fee instalments
+    (
+        "v068_transfer_reality.sql",
+        include_str!("sql/v068_transfer_reality.sql"),
+    ),
+    // V69: Player character, team tactical familiarity and pair chemistry
+    (
+        "v069_character_and_chemistry.sql",
+        include_str!("sql/v069_character_and_chemistry.sql"),
+    ),
+    // V70: Academy category per team, and a player's academy record (joined, deadline, spells)
+    (
+        "v070_youth_academy.sql",
+        include_str!("sql/v070_youth_academy.sql"),
     ),
 ];
 
@@ -1179,6 +1194,9 @@ mod tests {
     ("v065_player_league_stats.sql", 0x877d34d1535c0e66),
     ("v066_player_competition_stats.sql", 0x80ce31187d396eed),
     ("v067_player_season_stints.sql", 0xf1b727b06deb6941),
+    ("v068_transfer_reality.sql", 0x8414b57a3a31dfb8),
+    ("v069_character_and_chemistry.sql", 0xceb05bfe38d298a7),
+    ("v070_youth_academy.sql", 0x805be3f450a924c1),
     ];
 
     /// Given the migrations already shipped

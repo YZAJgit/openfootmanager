@@ -32,6 +32,10 @@ pub struct Team {
     pub sponsorship: Option<Sponsorship>,
     #[serde(default)]
     pub facilities: Facilities,
+    /// The club's EPPP-style academy category. Saved in its own `teams` column (v070).
+    #[serde(default)]
+    #[ts(skip)]
+    pub academy_tier: AcademyTier,
 
     // Tactical
     pub formation: String,
@@ -76,6 +80,13 @@ pub struct Team {
 
     // History
     pub history: Vec<TeamSeasonRecord>,
+
+    /// How well the side knows the formation it plays, advanced after each match
+    /// (`ofm_core::chemistry`). Saved in its own `teams` column (v069); `ts(skip)` keeps the
+    /// generated wire types unchanged until a screen shows it.
+    #[serde(default)]
+    #[ts(skip)]
+    pub tactical_familiarity: crate::character::TeamTacticalFamiliarity,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, TS)]
@@ -319,6 +330,21 @@ pub struct TrainingGroup {
     pub name: String,
     pub focus: TrainingFocus,
     pub player_ids: Vec<String>,
+    /// The intensity this group trains at, when it has one of its own. `None` is a squad group,
+    /// which trains at the club's standing intensity. A group with one player and an intensity is
+    /// an individual development plan (`ofm_core::training_feel`).
+    ///
+    /// It lives in the existing `teams.training_groups` JSON blob, so old saves load with `None`
+    /// and no migration is needed; `ts(skip)` keeps the generated wire types unchanged until a
+    /// screen shows it.
+    #[serde(default)]
+    #[ts(skip)]
+    pub intensity: Option<TrainingIntensity>,
+    /// The senior player who mentors this group's one player, if it is an individual plan with a
+    /// mentor. Stored in the same JSON blob as `intensity`; `ts(skip)` for the same reason.
+    #[serde(default)]
+    #[ts(skip)]
+    pub mentor_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -440,6 +466,15 @@ pub enum FacilityType {
     Scouting,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum AcademyTier {
+    CategoryOne,
+    CategoryTwo,
+    #[default]
+    CategoryThree,
+    CategoryFour,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct Facilities {
@@ -488,6 +523,7 @@ impl Team {
             financial_ledger: Vec::new(),
             sponsorship: None,
             facilities: Facilities::default(),
+            academy_tier: AcademyTier::default(),
             formation: "4-4-2".to_string(),
             play_style: PlayStyle::Balanced,
             player_roles: HashMap::new(),
@@ -507,6 +543,7 @@ impl Team {
             match_roles: MatchRoles::default(),
             form: Vec::new(),
             history: Vec::new(),
+            tactical_familiarity: Default::default(),
         }
     }
 
@@ -516,7 +553,14 @@ impl Team {
 
         for group in &mut self.training_groups {
             group.player_ids.retain(|id| id != player_id);
+            if group.mentor_id.as_deref() == Some(player_id) {
+                group.mentor_id = None;
+            }
         }
+        // A plan with nobody left on it would keep counting against the club's limit of three. A
+        // squad group has no intensity of its own and stays, empty, for the editor to refill.
+        self.training_groups
+            .retain(|group| !(group.player_ids.is_empty() && group.intensity.is_some()));
 
         clear_match_role_if_matches(&mut self.match_roles.captain, player_id);
         clear_match_role_if_matches(&mut self.match_roles.vice_captain, player_id);

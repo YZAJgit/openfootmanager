@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::sync::Arc;
+use ts_rs::TS;
 
 use crate::team::FinancialTransactionKind;
 
@@ -34,6 +35,8 @@ pub enum CashKind {
     BoardSupport,
     Facilities,
     Upkeep,
+    /// A host club's share of the broadcast deal for a televised home match.
+    TvBroadcast,
     Other,
 }
 
@@ -53,6 +56,27 @@ impl CashKind {
             FinancialTransactionKind::CommercialCampaign => Self::CommercialCampaign,
         }
     }
+}
+
+/// One scheduled tranche of a transfer fee paid in instalments.
+///
+/// The upfront part of the fee moves on the day of the transfer; each later tranche is one of
+/// these, posted by weekly settlement once `due_date` has come. `settled` flips only after the
+/// buyer's debit and the seller's credit have both been posted, so a tranche is paid once.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct TransferInstallment {
+    pub id: String,
+    pub buyer_team_id: String,
+    pub seller_team_id: String,
+    pub player_id: String,
+    /// Integer euros, always positive: the buyer pays it, the seller receives it.
+    pub amount: i64,
+    /// Game-clock date (`YYYY-MM-DD`) from which the tranche may be settled.
+    pub due_date: String,
+    #[serde(default)]
+    pub settled: bool,
+    /// Game-clock date (`YYYY-MM-DD`) the transfer that scheduled it was registered.
+    pub created_date: String,
 }
 
 /// Append-only cash journal. `Clone` is a pointer bump; writers copy-on-write.
@@ -119,6 +143,30 @@ mod tests {
         assert_eq!(json, "\"transfer_fee_out\"");
         let back: CashKind = serde_json::from_str(&json).unwrap();
         assert_eq!(back, CashKind::TransferFeeOut);
+    }
+
+    /// Given the broadcast kind
+    /// When it is serialized and read back
+    /// Then it is stored as `tv_broadcast`, the name the journal's SQLite column keeps.
+    #[test]
+    fn tv_broadcast_serializes_as_snake_case() {
+        let json = serde_json::to_string(&CashKind::TvBroadcast).unwrap();
+        assert_eq!(json, "\"tv_broadcast\"");
+        let back: CashKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, CashKind::TvBroadcast);
+        assert!(CashKind::TvBroadcast.counts_toward_season_totals());
+    }
+
+    /// Given an instalment written before `settled` existed
+    /// When it is read
+    /// Then it reads as unsettled.
+    #[test]
+    fn an_installment_without_settled_reads_as_unsettled() {
+        let json = r#"{"id":"i1","buyer_team_id":"b","seller_team_id":"s","player_id":"p",
+            "amount":100,"due_date":"2026-08-01","created_date":"2026-07-01"}"#;
+        let installment: TransferInstallment = serde_json::from_str(json).unwrap();
+        assert!(!installment.settled);
+        assert_eq!(installment.amount, 100);
     }
 
     #[test]

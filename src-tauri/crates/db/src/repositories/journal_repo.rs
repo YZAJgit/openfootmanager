@@ -168,6 +168,30 @@ mod tests {
         assert_eq!(loaded[0].kind, CashKind::Matchday);
     }
 
+    /// Given a broadcast post in the journal
+    /// When it is written to SQLite and read back
+    /// Then it keeps its kind, amount and id.
+    #[test]
+    fn a_tv_broadcast_post_round_trips() {
+        let db = GameDatabase::open_in_memory().unwrap();
+        let post = CashPost {
+            kind: CashKind::TvBroadcast,
+            ..sample_post("tv-f1-club-a", 48_000)
+        };
+        insert_cash_posts(db.conn(), std::iter::once(&post)).unwrap();
+        let stored: String = db
+            .conn()
+            .query_row(
+                "SELECT kind FROM cash_journal WHERE id = 'tv-f1-club-a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored, "tv_broadcast");
+        let loaded = load_cash_journal(db.conn()).unwrap();
+        assert_eq!(loaded, vec![post]);
+    }
+
     #[test]
     fn load_preserves_insert_order_for_same_date() {
         let db = GameDatabase::open_in_memory().unwrap();

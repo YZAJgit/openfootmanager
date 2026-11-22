@@ -108,12 +108,62 @@ pub struct Player {
     pub loan_offers: Vec<LoanOffer>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_loan: Option<ActiveLoan>,
+    /// The fee, in whole euros, at which his club must let him talk to the bidder: a bid that
+    /// meets it skips the fee haggling. `None` (or a non-positive amount) means no clause.
+    ///
+    /// Saved in its own `players` column (v068); kept out of IPC JSON and generated wire types
+    /// until the screens that show it regenerate them.
+    #[serde(default, skip_serializing, skip_serializing_if = "Option::is_none")]
+    #[ts(skip)]
+    pub release_clause: Option<i64>,
+    /// Whether the parent club may call him back before his current loan ends. Describes the
+    /// running loan only, so a return clears it. Saved in its own `players` column (v068).
+    #[serde(default, skip_serializing)]
+    #[ts(skip)]
+    pub loan_recallable: bool,
+    /// The share of the borrower's minutes (0-100) the current loan promises him, when it
+    /// promises any. Describes the running loan only, so a return clears it.
+    #[serde(default, skip_serializing, skip_serializing_if = "Option::is_none")]
+    #[ts(skip)]
+    pub loan_guaranteed_minutes_pct: Option<u8>,
     #[serde(default)]
     pub morale_core: PlayerMoraleCore,
 
     /// Jersey/squad number (1–99). None means unassigned.
     #[serde(default)]
     pub jersey_number: Option<u8>,
+
+    /// His character: eight traits the match, training and contract talks read through
+    /// `ofm_core::character`. Saved in its own `players` column (v069); kept out of IPC JSON and
+    /// generated wire types until a screen shows it.
+    #[serde(default, skip_serializing)]
+    #[ts(skip)]
+    pub character: crate::character::CharacterProfile,
+    /// Academy membership, scholar deadline and pre-21 training spells. Saved as JSON (v070); kept
+    /// out of IPC JSON and generated wire types until a screen shows it.
+    #[serde(default, skip_serializing)]
+    #[ts(skip)]
+    pub academy: AcademyRecord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AcademyRecord {
+    #[serde(default)]
+    pub joined_on: Option<String>,
+    #[serde(default)]
+    pub scholarship_deadline: Option<String>,
+    #[serde(default)]
+    pub training_spells: Vec<TrainingSpell>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrainingSpell {
+    pub club_id: String,
+    pub football_nation: String,
+    pub started_on: String,
+    #[serde(default)]
+    pub ended_on: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
@@ -1054,8 +1104,13 @@ impl Player {
             transfer_offers: Vec::new(),
             loan_offers: Vec::new(),
             active_loan: None,
+            release_clause: None,
+            loan_recallable: false,
+            loan_guaranteed_minutes_pct: None,
             morale_core: PlayerMoraleCore::default(),
             jersey_number: None,
+            character: crate::character::CharacterProfile::default(),
+            academy: AcademyRecord::default(),
         }
     }
 }
@@ -1078,6 +1133,42 @@ mod tests {
         assert!(loan.involves("borrower"));
         assert!(loan.involves("lender"));
         assert!(!loan.involves("third"));
+    }
+
+    #[test]
+    fn sql_backed_player_state_is_not_sent_in_player_json() {
+        let mut player = Player::new(
+            "p1".to_string(),
+            "Player One".to_string(),
+            "Player One".to_string(),
+            "2000-01-01".to_string(),
+            "ENG".to_string(),
+            Position::Defender,
+            sample_attributes(),
+        );
+        player.release_clause = Some(1_000_000);
+        player.loan_recallable = true;
+        player.loan_guaranteed_minutes_pct = Some(75);
+        player.character = crate::character::CharacterProfile::default();
+        player.academy = AcademyRecord {
+            joined_on: Some("2025-07-01".to_string()),
+            ..AcademyRecord::default()
+        };
+
+        let json = serde_json::to_value(&player).unwrap();
+
+        for field in [
+            "release_clause",
+            "loan_recallable",
+            "loan_guaranteed_minutes_pct",
+            "character",
+            "academy",
+        ] {
+            assert!(
+                json.get(field).is_none(),
+                "{field} should stay backend-only"
+            );
+        }
     }
 
     /// Given an attribute block whose nineteen values all differ
@@ -1267,5 +1358,46 @@ mod tests {
         assert_eq!(player.natural_position, Position::Midfielder);
         assert!(!player.retired);
         assert!(player.movement_history.is_empty());
+        assert_eq!(player.release_clause, None);
+        assert!(!player.loan_recallable);
+        assert_eq!(player.loan_guaranteed_minutes_pct, None);
+    }
+
+    /// Given a player with a release clause and a recallable loan with promised minutes
+    /// When he is serialized and read back
+    /// Then backend-only terms are omitted and restore to their defaults.
+    #[test]
+    fn backend_only_transfer_terms_default_after_serde_roundtrip() {
+        let mut player = Player::new(
+            "p".to_string(),
+            "P".to_string(),
+            "P P".to_string(),
+            "2000-01-01".to_string(),
+            "GB".to_string(),
+            Position::Midfielder,
+            sample_attributes(),
+        );
+        assert_eq!(player.release_clause, None);
+        player.release_clause = Some(12_500_000);
+        player.loan_recallable = true;
+        player.loan_guaranteed_minutes_pct = Some(60);
+
+        let json = serde_json::to_value(&player).unwrap();
+        for field in [
+            "release_clause",
+            "loan_recallable",
+            "loan_guaranteed_minutes_pct",
+        ] {
+            assert!(
+                json.get(field).is_none(),
+                "{field} should stay backend-only"
+            );
+        }
+
+        let back: Player = serde_json::from_value(json).unwrap();
+
+        assert_eq!(back.release_clause, None);
+        assert!(!back.loan_recallable);
+        assert_eq!(back.loan_guaranteed_minutes_pct, None);
     }
 }

@@ -198,7 +198,12 @@ describe("TrainingGroupsCard", () => {
       <TrainingGroupsCard
         team={createTeam({
           training_groups: [
-            { id: "individual:player-1", name: "John Smith", focus: "Technical", player_ids: ["player-1"] },
+            {
+              id: "individual:player-1",
+              name: "John Smith",
+              focus: "Technical",
+              player_ids: ["player-1"],
+            },
           ],
         })}
         onGameUpdate={vi.fn()}

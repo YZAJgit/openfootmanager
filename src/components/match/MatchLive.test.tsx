@@ -151,7 +151,15 @@ describe("MatchLive", () => {
   afterEach(() => vi.useRealTimers());
 
   it("opens the 2D pitch and shot map panel", () => {
-    renderLive({ snapshot: { ...SNAPSHOT, shots: [], home_xg: 0.2, away_xg: 0.1, pitch_frame: null } as unknown as MatchSnapshot });
+    renderLive({
+      snapshot: {
+        ...SNAPSHOT,
+        shots: [],
+        home_xg: 0.2,
+        away_xg: 0.1,
+        pitch_frame: null,
+      } as unknown as MatchSnapshot,
+    });
     fireEvent.click(screen.getByRole("button", { name: "match.pitch" }));
     expect(screen.getByRole("img", { name: "match.pitch" })).toBeInTheDocument();
     expect(screen.getByText("home: 0.20 xG")).toBeInTheDocument();

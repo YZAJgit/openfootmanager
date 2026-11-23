@@ -32,8 +32,9 @@ pub struct Team {
     pub sponsorship: Option<Sponsorship>,
     #[serde(default)]
     pub facilities: Facilities,
-    /// The club's EPPP-style academy category. Saved in its own `teams` column (v070).
-    #[serde(default)]
+    /// The club's EPPP-style academy category. Saved in its own `teams` column (v070); kept out
+    /// of IPC JSON and generated wire types until a screen shows it.
+    #[serde(default, skip_serializing)]
     #[ts(skip)]
     pub academy_tier: AcademyTier,
 
@@ -82,9 +83,9 @@ pub struct Team {
     pub history: Vec<TeamSeasonRecord>,
 
     /// How well the side knows the formation it plays, advanced after each match
-    /// (`ofm_core::chemistry`). Saved in its own `teams` column (v069); `ts(skip)` keeps the
-    /// generated wire types unchanged until a screen shows it.
-    #[serde(default)]
+    /// (`ofm_core::chemistry`). Saved in its own `teams` column (v069); kept out of IPC JSON and
+    /// generated wire types until a screen shows it.
+    #[serde(default, skip_serializing)]
     #[ts(skip)]
     pub tactical_familiarity: crate::character::TeamTacticalFamiliarity,
 }
@@ -335,15 +336,14 @@ pub struct TrainingGroup {
     /// an individual development plan (`ofm_core::training_feel`).
     ///
     /// It lives in the existing `teams.training_groups` JSON blob, so old saves load with `None`
-    /// and no migration is needed; `ts(skip)` keeps the generated wire types unchanged until a
-    /// screen shows it.
-    #[serde(default)]
-    #[ts(skip)]
+    /// and no migration is needed; `skip_serializing_if = "Option::is_none"` keeps squad groups
+    /// compact on the wire while exposing optional plan fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub intensity: Option<TrainingIntensity>,
     /// The senior player who mentors this group's one player, if it is an individual plan with a
-    /// mentor. Stored in the same JSON blob as `intensity`; `ts(skip)` for the same reason.
-    #[serde(default)]
-    #[ts(skip)]
+    /// mentor. Stored in the same JSON blob as `intensity`; `skip_serializing_if = "Option::is_none"`
+    /// keeps squad groups compact on the wire while exposing optional plan fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mentor_id: Option<String>,
 }
 
@@ -573,5 +573,76 @@ impl Team {
 fn clear_match_role_if_matches(role: &mut Option<String>, player_id: &str) {
     if role.as_deref() == Some(player_id) {
         *role = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Given a club with non-default SQL-backed academy tier and tactical familiarity
+    /// When the club is serialized for IPC and read back
+    /// Then both fields are omitted from JSON and deserialize to their defaults.
+    #[test]
+    fn sql_backed_team_state_is_not_sent_in_team_json() {
+        let mut team = Team::new(
+            "t1".to_string(),
+            "Club One".to_string(),
+            "CLB".to_string(),
+            "ENG".to_string(),
+            "London".to_string(),
+            "Park".to_string(),
+            10_000,
+        );
+        team.academy_tier = AcademyTier::CategoryOne;
+        team.tactical_familiarity =
+            crate::character::TeamTacticalFamiliarity::new("4-3-3", 65.0, 10);
+
+        let json = serde_json::to_value(&team).unwrap();
+
+        assert!(json.get("academy_tier").is_none());
+        assert!(json.get("tactical_familiarity").is_none());
+
+        let back: Team = serde_json::from_value(json).unwrap();
+        assert_eq!(back.academy_tier, AcademyTier::default());
+        assert_eq!(
+            back.tactical_familiarity,
+            crate::character::TeamTacticalFamiliarity::default()
+        );
+    }
+
+    /// Given a squad training group without plan fields and an individual plan with both set
+    /// When both are serialized and read back
+    /// Then the squad group omits `intensity` and `mentor_id`, while the individual plan keeps
+    /// them for SQLite persistence.
+    #[test]
+    fn training_group_omits_absent_plan_fields_and_preserves_present_ones() {
+        let squad_group = TrainingGroup {
+            id: "squad-1".to_string(),
+            name: "First Team".to_string(),
+            focus: TrainingFocus::Physical,
+            player_ids: vec!["p1".to_string()],
+            intensity: None,
+            mentor_id: None,
+        };
+        let squad_json = serde_json::to_value(&squad_group).unwrap();
+        assert!(squad_json.get("intensity").is_none());
+        assert!(squad_json.get("mentor_id").is_none());
+        let squad_back: TrainingGroup = serde_json::from_value(squad_json).unwrap();
+        assert_eq!(squad_back, squad_group);
+
+        let individual_plan = TrainingGroup {
+            id: "individual:p2".to_string(),
+            name: "Player Two".to_string(),
+            focus: TrainingFocus::Technical,
+            player_ids: vec!["p2".to_string()],
+            intensity: Some(TrainingIntensity::High),
+            mentor_id: Some("mentor-1".to_string()),
+        };
+        let plan_json = serde_json::to_value(&individual_plan).unwrap();
+        assert!(plan_json.get("intensity").is_some());
+        assert!(plan_json.get("mentor_id").is_some());
+        let plan_back: TrainingGroup = serde_json::from_value(plan_json).unwrap();
+        assert_eq!(plan_back, individual_plan);
     }
 }

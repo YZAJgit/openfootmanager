@@ -20,7 +20,7 @@ export default function MatchPitch2D({
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-3">
-      <div
+      <section
         className="flex justify-between gap-2 text-body tabular-nums"
         aria-label={t("match.expectedGoals")}
       >
@@ -33,14 +33,22 @@ export default function MatchPitch2D({
         <span className="text-fg">
           {awayName}: {awayXg.toFixed(2)} xG
         </span>
-      </div>
+      </section>
       <svg
         viewBox="0 0 100 100"
         role="img"
         aria-label={t("match.pitch")}
         className="w-full max-h-96 rounded-md bg-positive-tint text-on-brand"
       >
-        <rect x="2" y="2" width="96" height="96" fill="none" stroke="currentColor" strokeWidth="0.6" />
+        <rect
+          x="2"
+          y="2"
+          width="96"
+          height="96"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.6"
+        />
         <line x1="50" y1="2" x2="50" y2="98" stroke="currentColor" strokeWidth="0.4" />
         <circle cx="50" cy="50" r="9" fill="none" stroke="currentColor" strokeWidth="0.4" />
         {frame?.players.map((player) => (

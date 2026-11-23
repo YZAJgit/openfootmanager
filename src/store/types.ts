@@ -11,6 +11,8 @@ export interface TrainingGroupData {
   name: string;
   focus: string;
   player_ids: string[];
+  intensity?: string | null;
+  mentor_id?: string | null;
 }
 
 export interface TeamColors {

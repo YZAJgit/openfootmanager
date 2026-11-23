@@ -12,10 +12,24 @@ describe("MatchPitch2D", () => {
           minute: 24,
           phase: "FirstHalf",
           ball: { x: 55, y: 50, owner_id: "p1", carrier_side: "Home", in_flight: false },
-          players: [{ player_id: "p1", side: "Home", position: "Forward", x: 75, y: 35, has_ball: true }],
+          players: [
+            { player_id: "p1", side: "Home", position: "Forward", x: 75, y: 35, has_ball: true },
+          ],
           last_event_label: null,
         }}
-        shots={[{ minute: 18, side: "Home", shooter_id: "p1", x: 80, y: 50, xg: 0.32, outcome: "Saved", body_part: "Foot", assisted_by: null }]}
+        shots={[
+          {
+            minute: 18,
+            side: "Home",
+            shooter_id: "p1",
+            x: 80,
+            y: 50,
+            xg: 0.32,
+            outcome: "Saved",
+            body_part: "Foot",
+            assisted_by: null,
+          },
+        ]}
         homeXg={0.32}
         awayXg={0}
         homeName="Home FC"

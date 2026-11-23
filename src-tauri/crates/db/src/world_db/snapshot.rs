@@ -148,104 +148,129 @@ impl WorldSnapshot {
             .map(club_record)
             .collect::<Result<Vec<_>, _>>()?;
         let mut players = Vec::with_capacity(world.players.len());
-        let mut season_stats = Vec::new();
-        let mut memberships = Vec::new();
-        let mut seen_stats: HashSet<(String, u32, String)> = HashSet::new();
+        let mut history = PlayerHistoryRows::default();
 
         for player in &world.players {
             players.push(player_record(player)?);
-
-            for entry in &player.career {
-                // A career row can name a club this world does not define (an authored history,
-                // or a club that has since left the database). Its name is still worth keeping;
-                // its id cannot satisfy the foreign key, so it stays unknown.
-                let club_id = (!entry.team_id.is_empty()
-                    && club_names.contains_key(entry.team_id.as_str()))
-                .then(|| entry.team_id.clone());
-                push_stat(
-                    &mut season_stats,
-                    &mut seen_stats,
-                    SeasonStatRecord {
-                        player_id: player.id.clone(),
-                        season: entry.season,
-                        competition_id: String::new(),
-                        club_id: club_id.clone(),
-                        appearances: Some(entry.appearances),
-                        minutes_played: None,
-                        goals: Some(entry.goals),
-                        assists: Some(entry.assists),
-                        clean_sheets: None,
-                        yellow_cards: None,
-                        red_cards: None,
-                        avg_rating: None,
-                    },
-                );
-                memberships.push(MembershipRecord {
-                    player_id: player.id.clone(),
-                    club_id,
-                    club_name: entry.team_name.clone(),
-                    valid_from: entry.from.clone(),
-                    valid_to: entry.until.clone(),
-                    kind: String::from("career"),
-                });
-            }
-
+            history.push_career(player, &club_names);
             if let Some(season) = current_season {
-                let current_club_id = player.team_id.clone();
-                push_stat(
-                    &mut season_stats,
-                    &mut seen_stats,
-                    season_record(
-                        &player.id,
-                        &player.stats,
-                        season,
-                        String::new(),
-                        current_club_id.clone(),
-                    ),
-                );
-                for (competition_id, stats) in &player.league_stats_by_competition {
-                    push_stat(
-                        &mut season_stats,
-                        &mut seen_stats,
-                        season_record(
-                            &player.id,
-                            stats,
-                            season,
-                            competition_id.clone(),
-                            current_club_id.clone(),
-                        ),
-                    );
-                }
+                history.push_current_season_stats(player, season);
             }
-
-            if let Some(club_id) = &player.team_id {
-                let already_open = player
-                    .career
-                    .last()
-                    .is_some_and(|entry| &entry.team_id == club_id && entry.until.is_none());
-                if !already_open {
-                    memberships.push(MembershipRecord {
-                        player_id: player.id.clone(),
-                        club_id: Some(club_id.clone()),
-                        club_name: club_names
-                            .get(club_id.as_str())
-                            .map_or_else(String::new, |name| (*name).to_string()),
-                        valid_from: player.contract_start().map(str::to_string),
-                        valid_to: None,
-                        kind: String::from("current"),
-                    });
-                }
-            }
+            history.push_open_membership(player, &club_names);
         }
 
         Ok(Self {
             clubs,
             players,
-            season_stats,
-            memberships,
+            season_stats: history.season_stats,
+            memberships: history.memberships,
             entity_links: Vec::new(),
             fetch_log: Vec::new(),
         })
+    }
+}
+
+/// The per-player rows `from_world_data` accumulates, with the keys already used for stats.
+#[derive(Default)]
+struct PlayerHistoryRows {
+    season_stats: Vec<SeasonStatRecord>,
+    memberships: Vec<MembershipRecord>,
+    seen_stats: HashSet<(String, u32, String)>,
+}
+
+impl PlayerHistoryRows {
+    /// One stat row and one membership per career entry.
+    fn push_career(&mut self, player: &domain::player::Player, club_names: &HashMap<&str, &str>) {
+        for entry in &player.career {
+            // A career row can name a club this world does not define (an authored history,
+            // or a club that has since left the database). Its name is still worth keeping;
+            // its id cannot satisfy the foreign key, so it stays unknown.
+            let club_id = (!entry.team_id.is_empty()
+                && club_names.contains_key(entry.team_id.as_str()))
+            .then(|| entry.team_id.clone());
+            push_stat(
+                &mut self.season_stats,
+                &mut self.seen_stats,
+                SeasonStatRecord {
+                    player_id: player.id.clone(),
+                    season: entry.season,
+                    competition_id: String::new(),
+                    club_id: club_id.clone(),
+                    appearances: Some(entry.appearances),
+                    minutes_played: None,
+                    goals: Some(entry.goals),
+                    assists: Some(entry.assists),
+                    clean_sheets: None,
+                    yellow_cards: None,
+                    red_cards: None,
+                    avg_rating: None,
+                },
+            );
+            self.memberships.push(MembershipRecord {
+                player_id: player.id.clone(),
+                club_id,
+                club_name: entry.team_name.clone(),
+                valid_from: entry.from.clone(),
+                valid_to: entry.until.clone(),
+                kind: String::from("career"),
+            });
+        }
+    }
+
+    /// The whole-season totals row plus one row per competition, all under `season`.
+    fn push_current_season_stats(&mut self, player: &domain::player::Player, season: u32) {
+        let current_club_id = player.team_id.clone();
+        push_stat(
+            &mut self.season_stats,
+            &mut self.seen_stats,
+            season_record(
+                &player.id,
+                &player.stats,
+                season,
+                String::new(),
+                current_club_id.clone(),
+            ),
+        );
+        for (competition_id, stats) in &player.league_stats_by_competition {
+            push_stat(
+                &mut self.season_stats,
+                &mut self.seen_stats,
+                season_record(
+                    &player.id,
+                    stats,
+                    season,
+                    competition_id.clone(),
+                    current_club_id.clone(),
+                ),
+            );
+        }
+    }
+
+    /// A `current` membership, unless the career already ends in an open stint at that club.
+    fn push_open_membership(
+        &mut self,
+        player: &domain::player::Player,
+        club_names: &HashMap<&str, &str>,
+    ) {
+        let Some(club_id) = &player.team_id else {
+            return;
+        };
+        let already_open = player
+            .career
+            .last()
+            .is_some_and(|entry| &entry.team_id == club_id && entry.until.is_none());
+        if !already_open {
+            self.memberships.push(MembershipRecord {
+                player_id: player.id.clone(),
+                club_id: Some(club_id.clone()),
+                club_name: club_names
+                    .get(club_id.as_str())
+                    .map_or_else(String::new, |name| (*name).to_string()),
+                valid_from: player.contract_start().map(str::to_string),
+                valid_to: None,
+                kind: String::from("current"),
+            });
+        }
     }
 }
 

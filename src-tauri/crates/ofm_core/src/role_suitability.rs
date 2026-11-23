@@ -16,6 +16,8 @@ use AttributeKey::{
 
 /// What `role` asks for, in hundredths: every attribute not named weighs nothing. Each list sums
 /// to 100 (`every_role_weighs_its_attributes_to_one`).
+// Length is a flat per-role data table, not logic; splitting it would only scatter the weights.
+#[allow(clippy::too_many_lines)]
 fn weights(role: &PlayerRole) -> &'static [(AttributeKey, u8)] {
     match role {
         PlayerRole::Standard => &[

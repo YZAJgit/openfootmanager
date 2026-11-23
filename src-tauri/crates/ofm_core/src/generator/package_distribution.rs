@@ -6,7 +6,6 @@ use super::package::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::io::Read;
 
 /// A review supplied by the distributor's trusted registry, never by the package author.
 /// The caller is responsible for authenticating the registry and its reviewers. This type
@@ -347,135 +346,211 @@ fn validate_distribution_archive_files_with_limits(
     max_archive_bytes: u64,
 ) -> Vec<DistributionIssue> {
     let mut issues = Vec::new();
-    let file = match std::fs::File::open(path) {
-        Ok(file) => file,
-        Err(_) => {
-            file_issue(&mut issues, ".", "unreadable_distribution_archive");
-            return issues;
-        }
-    };
-    match file.metadata() {
-        Ok(metadata) if !metadata.is_file() => {
-            file_issue(&mut issues, ".", "unreadable_distribution_archive");
-            return issues;
-        }
-        Ok(metadata) if metadata.len() > max_archive_bytes => {
-            file_issue(&mut issues, ".", "oversized_distribution_archive");
-            return issues;
-        }
-        Ok(_) => {}
-        Err(_) => {
-            file_issue(&mut issues, ".", "unreadable_distribution_archive");
-            return issues;
-        }
-    }
-    let archive = zip::ZipArchive::new(file).ok();
-    let Some(mut archive) = archive else {
-        file_issue(&mut issues, ".", "unreadable_distribution_archive");
+    let Some(mut archive) =
+        open_distribution_archive(path, max_files, max_archive_bytes, &mut issues)
+    else {
         return issues;
     };
-    if archive.len() > max_files {
-        file_issue(&mut issues, ".", "too_many_distribution_files");
-        return issues;
-    }
     // zip indexes duplicate central-directory names into one entry; its consistency
     // check is essential even though we separately reject case/path aliases below.
     let inconsistent = archive.validate_header_consistency().is_err();
     let mut seen = std::collections::BTreeSet::new();
-    let mut declared_total = 0u64;
-    let mut read_total = 0u64;
+    let mut budget = ArchiveByteBudget {
+        max_total_bytes,
+        declared_total: 0,
+        read_total: 0,
+    };
     for index in 0..archive.len() {
-        let relative = archive
-            .name_for_index(index)
-            .and_then(Result::ok)
-            .map(|name| name.into_owned())
-            .unwrap_or_else(|| format!("@entry/{index}"));
-        if inconsistent {
-            file_issue(
-                &mut issues,
-                &relative,
-                "invalid_distribution_archive_headers",
-            );
-        }
-        let mut entry = match archive.by_index(index) {
-            Ok(entry) => entry,
-            Err(_) => {
-                file_issue(&mut issues, &relative, "unreadable_distribution_file");
-                continue;
-            }
-        };
-        let name = match entry.name() {
-            Ok(name) => name.into_owned(),
-            Err(_) => {
-                file_issue(&mut issues, &relative, "unsafe_distribution_path");
-                continue;
-            }
-        };
-        let normalized = if entry.is_dir() {
-            name.strip_suffix('/').unwrap_or(&name)
-        } else {
-            &name
-        };
-        if !safe_inventory_path(normalized) {
-            file_issue(&mut issues, &name, "unsafe_distribution_path");
-            continue;
-        }
-        if !seen.insert(normalized.to_ascii_lowercase()) {
-            file_issue(&mut issues, &name, "duplicate_distribution_path");
-        }
-        if entry.unix_mode().is_some_and(|mode| {
-            let kind = mode & 0o170000;
-            kind != 0 && kind != 0o100000 && kind != 0o040000
-        }) {
-            file_issue(&mut issues, &name, "unsafe_distribution_path");
-        } else if entry.is_dir() {
-            let declared_size = entry.size();
-            let compressed_size = entry.compressed_size();
-            declared_total = declared_total.saturating_add(declared_size);
-            if declared_total > max_total_bytes {
-                file_issue(&mut issues, &name, "distribution_package_too_large");
-                break;
-            }
-            // Directory records are structural only. Bound the read to one byte so even a
-            // forged size field cannot make this inventory decompress an arbitrary payload.
-            let mut byte = [0u8; 1];
-            match entry.read(&mut byte) {
-                Ok(0) if declared_size == 0 && compressed_size == 0 => {}
-                Ok(read) => {
-                    read_total = read_total.saturating_add(read as u64);
-                    file_issue(&mut issues, &name, "nonempty_distribution_directory_entry");
-                    if read_total > max_total_bytes {
-                        file_issue(&mut issues, &name, "distribution_package_too_large");
-                        break;
-                    }
-                }
-                Err(_) => {
-                    if declared_size != 0 || compressed_size != 0 {
-                        file_issue(&mut issues, &name, "nonempty_distribution_directory_entry");
-                    }
-                    file_issue(&mut issues, &name, "unreadable_distribution_file");
-                }
-            }
-        } else {
-            declared_total = declared_total.saturating_add(entry.size());
-            if declared_total > max_total_bytes {
-                file_issue(&mut issues, &name, "distribution_package_too_large");
-                break;
-            }
-            if entry.size() > MAX_SCHEMA_BYTES {
-                file_issue(&mut issues, &name, "oversized_distribution_file");
-            } else {
-                read_total =
-                    read_total.saturating_add(inspect_schema_file(&name, &mut entry, &mut issues));
-                if read_total > max_total_bytes {
-                    file_issue(&mut issues, &name, "distribution_package_too_large");
-                    break;
-                }
-            }
+        if inspect_archive_entry(
+            &mut archive,
+            index,
+            inconsistent,
+            &mut seen,
+            &mut budget,
+            &mut issues,
+        )
+        .is_break()
+        {
+            break;
         }
     }
     issues.sort_by(|a, b| (&a.entity_id, a.code).cmp(&(&b.entity_id, b.code)));
     issues
+}
+
+/// Opens the archive, or records why it cannot be inspected and returns `None`.
+fn open_distribution_archive(
+    path: &std::path::Path,
+    max_files: usize,
+    max_archive_bytes: u64,
+    issues: &mut Vec<DistributionIssue>,
+) -> Option<zip::ZipArchive<std::fs::File>> {
+    let Ok(file) = std::fs::File::open(path) else {
+        file_issue(issues, ".", "unreadable_distribution_archive");
+        return None;
+    };
+    match file.metadata() {
+        Ok(metadata) if !metadata.is_file() => {
+            file_issue(issues, ".", "unreadable_distribution_archive");
+            return None;
+        }
+        Ok(metadata) if metadata.len() > max_archive_bytes => {
+            file_issue(issues, ".", "oversized_distribution_archive");
+            return None;
+        }
+        Ok(_) => {}
+        Err(_) => {
+            file_issue(issues, ".", "unreadable_distribution_archive");
+            return None;
+        }
+    }
+    let archive = zip::ZipArchive::new(file).ok();
+    let Some(archive) = archive else {
+        file_issue(issues, ".", "unreadable_distribution_archive");
+        return None;
+    };
+    if archive.len() > max_files {
+        file_issue(issues, ".", "too_many_distribution_files");
+        return None;
+    }
+    Some(archive)
+}
+
+/// Running byte totals across archive entries, checked against one shared ceiling.
+struct ArchiveByteBudget {
+    max_total_bytes: u64,
+    declared_total: u64,
+    read_total: u64,
+}
+
+/// `Break` means the inventory must stop: the package is over its uncompressed-size ceiling.
+fn inspect_archive_entry(
+    archive: &mut zip::ZipArchive<std::fs::File>,
+    index: usize,
+    inconsistent: bool,
+    seen: &mut std::collections::BTreeSet<String>,
+    budget: &mut ArchiveByteBudget,
+    issues: &mut Vec<DistributionIssue>,
+) -> std::ops::ControlFlow<()> {
+    use std::ops::ControlFlow::Continue;
+    let relative = archive
+        .name_for_index(index)
+        .and_then(Result::ok)
+        .map(|name| name.into_owned())
+        .unwrap_or_else(|| format!("@entry/{index}"));
+    if inconsistent {
+        file_issue(issues, &relative, "invalid_distribution_archive_headers");
+    }
+    let mut entry = match archive.by_index(index) {
+        Ok(entry) => entry,
+        Err(_) => {
+            file_issue(issues, &relative, "unreadable_distribution_file");
+            return Continue(());
+        }
+    };
+    let name = match entry.name() {
+        Ok(name) => name.into_owned(),
+        Err(_) => {
+            file_issue(issues, &relative, "unsafe_distribution_path");
+            return Continue(());
+        }
+    };
+    let normalized = if entry.is_dir() {
+        name.strip_suffix('/').unwrap_or(&name)
+    } else {
+        &name
+    };
+    if !safe_inventory_path(normalized) {
+        file_issue(issues, &name, "unsafe_distribution_path");
+        return Continue(());
+    }
+    if !seen.insert(normalized.to_ascii_lowercase()) {
+        file_issue(issues, &name, "duplicate_distribution_path");
+    }
+    if entry.unix_mode().is_some_and(|mode| {
+        let kind = mode & 0o170000;
+        kind != 0 && kind != 0o100000 && kind != 0o040000
+    }) {
+        file_issue(issues, &name, "unsafe_distribution_path");
+        Continue(())
+    } else if entry.is_dir() {
+        let (declared_size, compressed_size) = (entry.size(), entry.compressed_size());
+        inspect_archive_directory_entry(
+            &name,
+            declared_size,
+            compressed_size,
+            &mut entry,
+            budget,
+            issues,
+        )
+    } else {
+        let declared_size = entry.size();
+        inspect_archive_file_entry(&name, declared_size, &mut entry, budget, issues)
+    }
+}
+
+fn inspect_archive_directory_entry(
+    name: &str,
+    declared_size: u64,
+    compressed_size: u64,
+    reader: &mut impl std::io::Read,
+    budget: &mut ArchiveByteBudget,
+    issues: &mut Vec<DistributionIssue>,
+) -> std::ops::ControlFlow<()> {
+    use std::ops::ControlFlow::{Break, Continue};
+    budget.declared_total = budget.declared_total.saturating_add(declared_size);
+    if budget.declared_total > budget.max_total_bytes {
+        file_issue(issues, name, "distribution_package_too_large");
+        return Break(());
+    }
+    // Directory records are structural only. Bound the read to one byte so even a
+    // forged size field cannot make this inventory decompress an arbitrary payload.
+    let mut byte = [0u8; 1];
+    match reader.read(&mut byte) {
+        Ok(0) if declared_size == 0 && compressed_size == 0 => {}
+        Ok(read) => {
+            budget.read_total = budget.read_total.saturating_add(read as u64);
+            file_issue(issues, name, "nonempty_distribution_directory_entry");
+            if budget.read_total > budget.max_total_bytes {
+                file_issue(issues, name, "distribution_package_too_large");
+                return Break(());
+            }
+        }
+        Err(_) => {
+            if declared_size != 0 || compressed_size != 0 {
+                file_issue(issues, name, "nonempty_distribution_directory_entry");
+            }
+            file_issue(issues, name, "unreadable_distribution_file");
+        }
+    }
+    Continue(())
+}
+
+fn inspect_archive_file_entry(
+    name: &str,
+    declared_size: u64,
+    reader: &mut impl std::io::Read,
+    budget: &mut ArchiveByteBudget,
+    issues: &mut Vec<DistributionIssue>,
+) -> std::ops::ControlFlow<()> {
+    use std::ops::ControlFlow::{Break, Continue};
+    budget.declared_total = budget.declared_total.saturating_add(declared_size);
+    if budget.declared_total > budget.max_total_bytes {
+        file_issue(issues, name, "distribution_package_too_large");
+        return Break(());
+    }
+    if declared_size > MAX_SCHEMA_BYTES {
+        file_issue(issues, name, "oversized_distribution_file");
+    } else {
+        budget.read_total = budget
+            .read_total
+            .saturating_add(inspect_schema_file(name, reader, issues));
+        if budget.read_total > budget.max_total_bytes {
+            file_issue(issues, name, "distribution_package_too_large");
+            return Break(());
+        }
+    }
+    Continue(())
 }
 
 /// Empty issues means complete provenance and externally reviewed distribution rights.

@@ -2243,7 +2243,7 @@
     "stats": "İstatistikler",
     "lineups": "Dizilişler",
     "pitch": "Saha",
-    "expectedGoals": "Beklenen gol",
+    "expectedGoals": "Gol beklentisi",
     "simSpeed": "Simülasyon Hızı",
     "pause": "Duraklat",
     "slow": "Yavaş",
@@ -3047,8 +3047,8 @@
       "invalidPlayerRole": "Geçersiz oyuncu rolü",
       "playerNotFound": "Oyuncu bulunamadı",
       "playerNotOnLoan": "Bu oyuncu kiralık değil",
-      "notLoanParentClub": "Bu kiralığın sahibi kulüp siz değilsiniz",
-      "loanNotRecallable": "Bu kiralık geri çağrılamaz",
+      "notLoanParentClub": "Bu oyuncunun asıl kulübü siz değilsiniz",
+      "loanNotRecallable": "Bu kiralık oyuncu geri çağrılamaz",
       "invalidSquadRole": "Geçersiz kadro rolü",
       "jerseyNumberOutOfRange": "Forma numarası 1 ile 99 arasında olmalıdır",
       "jerseyNumberTaken": "Bu forma numarası kadronuzdaki başka bir oyuncu tarafından kullanılıyor",
@@ -3305,8 +3305,8 @@
       "startingXiWrongSize": "İlk 11 tam olarak on bir oyuncudan oluşmalıdır; kulübün oyuncusu daha azsa uygun tüm oyuncular.",
       "youthAcademy": {
         "notAcademyPlayer": "Bu oyuncu akademi oyuncusu değil.",
-        "noScholarshipDecision": "Bu oyuncu için verilecek bir burs kararı yok.",
-        "noMinutesBreach": "Kiralayan kulüp süre garantisini ihlal etmedi."
+        "noScholarshipDecision": "Bu oyuncu için verilecek bir altyapı sözleşmesi kararı yok.",
+        "noMinutesBreach": "Kiralık gittiği kulüp garanti edilen süre şartını ihlal etmedi."
       }
     },
     "sender": {
@@ -3936,20 +3936,20 @@
         "body": "Bu kaydın bir kısmı yüklenirken okunamadı. Kaybolmak yerine bir kenara ayrıldı ve kariyeriniz devam ediyor. Eksik bir şey görürseniz, kaydın eklendiği bir hata raporu ({{settings}} → {{reportBug}}) incelememizi sağlar."
       },
       "scholarshipDecision": {
-        "subject": "Burs kararı: {{player}}",
-        "body": "Patron, {{player}} on sekiz yaşına girdi ve bursu sona eriyor. {{deadline}} tarihine kadar ona profesyonel sözleşme teklif et ya da serbest bırak; bir şey yapmazsak o gün serbest bırakılır.",
+        "subject": "Altyapı sözleşmesi kararı: {{player}}",
+        "body": "Hocam, {{player}} on sekiz yaşına girdi ve altyapı sözleşmesi sona eriyor. {{deadline}} tarihine kadar kendisine profesyonel sözleşme teklif edin ya da serbest bırakın; bir işlem yapmazsak o gün serbest kalır.",
         "offer": "Profesyonel sözleşme teklif et",
-        "offerDescription": "Standart şartlarla ilk takıma geçer.",
+        "offerDescription": "Standart şartlarla A takıma yükselir.",
         "release": "Serbest bırak",
-        "releaseDescription": "Bursu sona erer ve kulüpten ayrılır."
+        "releaseDescription": "Altyapı sözleşmesi sona erer ve kulüpten ayrılır."
       },
       "youthLoanMinutesBreach": {
-        "subject": "Süre sözü tutulmadı: {{player}}",
-        "body": "Patron, {{player}} kiralıkta {{actual}} dakika oynadı, oysa şimdiye kadar {{required}} dakika garanti edilmişti. Onu geri çağırabilirsin."
+        "subject": "Kiralık süre sözü tutulmadı: {{player}}",
+        "body": "Hocam, {{player}} kiralık olarak {{actual}} dakika oynadı; oysa şimdiye kadar {{required}} dakika süre garanti edilmişti. Oyuncuyu geri çağırabilirsiniz."
       },
       "youthCompensation": {
-        "subject": "Eğitim tazminatı: {{player}}",
-        "body": "Patron, {{toTeam}} {{player}} oyuncusunu akademimizden aldı ve bize {{fee}} eğitim tazminatı ödedi."
+        "subject": "Yetiştirme tazminatı: {{player}}",
+        "body": "Hocam, {{toTeam}} kulübü {{player}} adlı oyuncuyu altyapımızdan aldı ve bize {{fee}} yetiştirme tazminatı ödedi."
       }
     },
     "news": {
@@ -4140,7 +4140,7 @@
     "digest": {
       "cause": {
         "individual_plan": "Bireysel plan ({{focus}}): {{weeks}} haftada {{sessions}} antrenman",
-        "mentor": "Bir mentor {{weeks}} hafta boyunca onunla çalıştı",
+        "mentor": "Bir rehber {{weeks}} hafta boyunca kendisiyle çalıştı",
         "match_minutes": "{{minutes}} maç dakikası",
         "training_load": "{{weeks}} haftada {{sessions}} antrenman",
         "idle": "{{weeks}} haftadır ne antrenman yaptı ne de oynadı"
@@ -4149,8 +4149,8 @@
         "rating_gain": "Reyting yükseldi ({{change}})",
         "rating_loss": "Reyting düştü ({{change}})",
         "rating_held": "Reyting sabit kaldı",
-        "character_shift": "Karakteri mentorununkine yaklaştı",
-        "stalled": "Hiçbir şey değişmedi"
+        "character_shift": "Karakteri rehberininkine yaklaştı",
+        "stalled": "Gelişim durdu"
       }
     }
   },

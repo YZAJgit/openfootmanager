@@ -7,6 +7,7 @@ import type {
 import type { PlayerKnowledge, VisibleWage } from "../../services/scoutingService";
 import type { CareerLine } from "../../store/generated/CareerLine";
 import type { PlayerCareer } from "../../store/generated/PlayerCareer";
+import type { PlayerCharacterView } from "../../store/generated/PlayerCharacterView";
 import type { PositionRatings } from "../../store/generated/PositionRatings";
 import type { PotentialOpinion } from "../../store/generated/PotentialOpinion";
 import type { Position } from "../../store/generated/Position";
@@ -33,6 +34,8 @@ export interface ProfileCase {
   seasonStats: PlayerAdvancedStatsSummary;
   /** His career as the backend projects it; `null` where it answers null (a retiree). */
   career: PlayerCareer | null;
+  /** His character traits and labels as the club may see them; `null` for an archived retiree. */
+  character: PlayerCharacterView | null;
   /** Laid over the world's player of this id, to show a state the generated career has none of. */
   playerPatch?: Partial<PlayerData>;
   /**
@@ -587,6 +590,27 @@ function careerOfRetiree(
   return careerFrom(rows, history);
 }
 
+const KNOWN_CHARACTER: PlayerCharacterView = {
+  known: true,
+  labels: ["ModelProfessional", "Consistent"],
+  profile: {
+    professionalism: 84,
+    ambition: 72,
+    loyalty: 76,
+    consistency: 82,
+    big_matches: 74,
+    pressure_handling: 75,
+    injury_proneness: 32,
+    adaptability: 68,
+  },
+};
+
+const UNKNOWN_CHARACTER: PlayerCharacterView = {
+  known: false,
+  labels: [],
+  profile: null,
+};
+
 /** The club's own player as the club sees him: known, his wage exact, with ratings and a season. */
 function ownCase(player: PlayerData, signedFrom: string | null): ProfileCase {
   return {
@@ -600,6 +624,7 @@ function ownCase(player: PlayerData, signedFrom: string | null): ProfileCase {
     recentMatches: fiveMatches(),
     seasonStats: aSeasonFor(player),
     career: ownCareer(player, signedFrom),
+    character: KNOWN_CHARACTER,
     playerPatch: { movement_history: ownHistory(player, signedFrom) },
     contractPreviews: contractPreviewsOf(player, true),
   };
@@ -623,6 +648,7 @@ export function profileCase(variant: HarnessProfile): ProfileCase {
     recentMatches: [],
     seasonStats: NO_SEASON_YET,
     career: null,
+    character: UNKNOWN_CHARACTER,
   };
   switch (variant) {
     case "own":
@@ -636,6 +662,7 @@ export function profileCase(variant: HarnessProfile): ProfileCase {
         recentMatches: fiveMatches(),
         seasonStats: aSeasonFor(own),
         career: ownCareer(own, rival.team_id),
+        character: KNOWN_CHARACTER,
         playerPatch: { movement_history: ownHistory(own, rival.team_id) },
         contractPreviews: contractPreviewsOf(own, true),
       };
@@ -650,6 +677,7 @@ export function profileCase(variant: HarnessProfile): ProfileCase {
         recentMatches: fiveMatches(),
         seasonStats: aSeasonFor(keeper),
         career: plainCareer(keeper),
+        character: KNOWN_CHARACTER,
         contractPreviews: contractPreviewsOf(keeper, true),
       };
     case "injured":
@@ -695,6 +723,7 @@ export function profileCase(variant: HarnessProfile): ProfileCase {
         knowledge: { kind: "known" },
         wage: { kind: "hidden" },
         career: rivalCareer(rival, own.team_id),
+        character: KNOWN_CHARACTER,
         positionRatings: positionRatingsOf(rival, { kind: "live" }),
         seasonStats: aSeasonFor(rival),
         // The current record is the renewal, which started on 1 July 2030.
@@ -721,6 +750,7 @@ export function profileCase(variant: HarnessProfile): ProfileCase {
           current: true,
         }),
         career: plainCareer(scouted),
+        character: KNOWN_CHARACTER,
         scoutedReport: {
           player_id: scouted.id,
           scouted_on: SCOUTED_ON,
@@ -764,6 +794,7 @@ export function profileCase(variant: HarnessProfile): ProfileCase {
         knowledge: null,
         wage: null,
         career: careerOfRetiree(retiree.career, retiredMovements),
+        character: null,
         retiredPlayer: {
           ...retiree,
           id: `${retiree.id}-retired`,

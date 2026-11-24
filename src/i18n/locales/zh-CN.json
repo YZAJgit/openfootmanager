@@ -4799,5 +4799,50 @@
     "body": "你上次游戏时发生了崩溃。报告它能帮助我们修复问题 —— 在任何内容离开你的电脑之前，你都会看到将要发送的全部内容。",
     "report": "报告",
     "notNow": "以后再说"
+  },
+  "character": {
+    "title": "性格",
+    "labelsAria": "性格标签",
+    "labels": {
+      "ModelProfessional": "职业楷模",
+      "Driven": "有进取心",
+      "Loyal": "忠诚",
+      "BigGamePlayer": "大赛型球员",
+      "Consistent": "表现稳定",
+      "Temperamental": "脾气火爆",
+      "InjuryProne": "容易受伤",
+      "Balanced": "均衡"
+    },
+    "traits": {
+      "professionalism": "职业素养",
+      "ambition": "雄心",
+      "loyalty": "忠诚度",
+      "consistency": "稳定性",
+      "big_matches": "大赛表现",
+      "pressure_handling": "抗压能力",
+      "injury_proneness": "受伤倾向",
+      "adaptability": "适应能力"
+    }
+  },
+  "chemistry": {
+    "title": "球队默契",
+    "cohesion": "凝聚力",
+    "tacticalFamiliarity": "战术熟悉度",
+    "neutral": "中立",
+    "matchesTogether": "共同出场 {{count}} 场",
+    "topPartnerships": "关键搭档",
+    "sharedMinutes": "{{count}} 分钟",
+    "assistantAdvice": "助理教练建议",
+    "noDataYet": "共同参加比赛，提升场上默契和战术熟悉度。",
+    "adviceKinds": {
+      "StrongPartnership": "默契搭档",
+      "WeakPartnership": "默契不足",
+      "UnfamiliarShape": "不熟悉的阵型"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} 配合默契（{{value}}）。",
+      "WeakPartnership": "{{players}} 仍需要时间磨合（{{value}}）。",
+      "UnfamiliarShape": "球队仍在熟悉 {{formation}} 阵型（{{value}}%）。"
+    }
   }
 }

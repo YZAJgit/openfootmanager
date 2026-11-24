@@ -16,12 +16,14 @@ import type { KnowledgeAnswer } from "../../../hooks/useKnowledgeAnswer";
 import { OverviewCard, OverviewRow } from "./OverviewCard";
 import { formOf, GOALKEEPER_AXES, OUTFIELD_AXES, resultOf } from "./overviewModel";
 import { isGoalkeeper } from "../PlayerProfile.attributes";
+import PlayerCharacterCard from "./PlayerCharacterCard";
 import { PlayerProfileRadar, type RadarAxis } from "./PlayerProfileRadar";
 
 type PlayerRole = string;
 
 export interface PlayerProfileOverviewProps {
   player: PlayerData;
+  characterRefreshKey?: string;
   language: string;
   /** False for a rival, a scouted player or a stranger: his condition and morale are not the club's to see. */
   showsPrivateState: boolean;
@@ -74,6 +76,7 @@ export default function PlayerProfileOverview(props: PlayerProfileOverviewProps)
         <div className="flex min-w-0 flex-col gap-3 @[40rem]:col-span-2 @[58rem]:col-span-1">
           <AttributesCard {...props} />
           <TraitsCard {...props} />
+          <PlayerCharacterCard playerId={props.player.id} refreshKey={props.characterRefreshKey} />
         </div>
       </div>
     </div>

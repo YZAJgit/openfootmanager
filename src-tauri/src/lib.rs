@@ -6,6 +6,7 @@ mod crash;
 mod main_window;
 mod platform;
 mod report;
+pub use commands::slices::{PlayerCharacterView, TeamChemistryView};
 pub use commands::world_library::{WorldLibraryRow, WorldsLibrary};
 use commands::*;
 
@@ -251,6 +252,8 @@ pub fn run() {
             get_visible_wage,
             get_potential_opinion,
             get_player_career,
+            get_player_character,
+            get_team_chemistry,
             get_youth_prospect_opinions,
             get_position_ratings,
             get_familiarity,

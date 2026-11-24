@@ -4799,5 +4799,50 @@
     "body": "Sesi terakhirmu berakhir dengan crash. Melaporkannya membantu kami memperbaikinya — kamu akan melihat semua yang akan dikirim sebelum apa pun keluar dari komputermu.",
     "report": "Laporkan",
     "notNow": "Nanti saja"
+  },
+  "character": {
+    "title": "Karakter",
+    "labelsAria": "Label karakter",
+    "labels": {
+      "ModelProfessional": "Profesional teladan",
+      "Driven": "Ambisius",
+      "Loyal": "Setia",
+      "BigGamePlayer": "Pemain laga besar",
+      "Consistent": "Konsisten",
+      "Temperamental": "Mudah tersulut",
+      "InjuryProne": "Rentan cedera",
+      "Balanced": "Seimbang"
+    },
+    "traits": {
+      "professionalism": "Profesionalisme",
+      "ambition": "Ambisi",
+      "loyalty": "Loyalitas",
+      "consistency": "Konsistensi",
+      "big_matches": "Laga besar",
+      "pressure_handling": "Mengatasi tekanan",
+      "injury_proneness": "Kerentanan cedera",
+      "adaptability": "Adaptabilitas"
+    }
+  },
+  "chemistry": {
+    "title": "Kekompakan tim",
+    "cohesion": "Kekompakan",
+    "tacticalFamiliarity": "Pemahaman taktik",
+    "neutral": "Netral",
+    "matchesTogether": "{{count}} laga bersama",
+    "topPartnerships": "Duet utama",
+    "sharedMinutes": "{{count}} menit",
+    "assistantAdvice": "Catatan asisten",
+    "noDataYet": "Bermain bersama untuk membangun pengertian di lapangan dan pemahaman taktik.",
+    "adviceKinds": {
+      "StrongPartnership": "Duet kuat",
+      "WeakPartnership": "Duet lemah",
+      "UnfamiliarShape": "Formasi belum dikenal"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} bekerja sama dengan baik ({{value}}).",
+      "WeakPartnership": "{{players}} masih perlu waktu untuk padu ({{value}}).",
+      "UnfamiliarShape": "Skuad masih mempelajari {{formation}} ({{value}}%)."
+    }
   }
 }

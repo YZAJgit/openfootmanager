@@ -4799,5 +4799,50 @@
     "body": "Votre dernière session s'est terminée par un plantage. Le signaler nous aide à le corriger — vous verrez tout ce qui serait envoyé avant que quoi que ce soit ne quitte votre ordinateur.",
     "report": "Le signaler",
     "notNow": "Pas maintenant"
+  },
+  "character": {
+    "title": "Caractère",
+    "labelsAria": "Traits de caractère",
+    "labels": {
+      "ModelProfessional": "Professionnel exemplaire",
+      "Driven": "Ambitieux",
+      "Loyal": "Fidèle",
+      "BigGamePlayer": "Joueur des grands matchs",
+      "Consistent": "Régulier",
+      "Temperamental": "Tempérament difficile",
+      "InjuryProne": "Sujet aux blessures",
+      "Balanced": "Équilibré"
+    },
+    "traits": {
+      "professionalism": "Professionnalisme",
+      "ambition": "Ambition personnelle",
+      "loyalty": "Loyauté",
+      "consistency": "Régularité",
+      "big_matches": "Grands matchs",
+      "pressure_handling": "Gestion de la pression",
+      "injury_proneness": "Fragilité physique",
+      "adaptability": "Adaptabilité"
+    }
+  },
+  "chemistry": {
+    "title": "Entente collective",
+    "cohesion": "Cohésion",
+    "tacticalFamiliarity": "Maîtrise tactique",
+    "neutral": "Neutre",
+    "matchesTogether": "{{count}} matchs ensemble",
+    "topPartnerships": "Associations clés",
+    "sharedMinutes": "{{count}} minutes",
+    "assistantAdvice": "Notes de l’adjoint",
+    "noDataYet": "Jouez ensemble pour améliorer les automatismes et la maîtrise tactique.",
+    "adviceKinds": {
+      "StrongPartnership": "Bonne association",
+      "WeakPartnership": "Association faible",
+      "UnfamiliarShape": "Dispositif inhabituel"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} combinent bien ({{value}}).",
+      "WeakPartnership": "{{players}} ont encore besoin de temps ({{value}}).",
+      "UnfamiliarShape": "L’équipe apprend encore le {{formation}} ({{value}} %)."
+    }
   }
 }

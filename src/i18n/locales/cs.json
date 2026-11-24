@@ -4799,5 +4799,50 @@
     "body": "Vaše poslední hraní skončilo pádem hry. Nahlášení nám pomůže chybu opravit — než cokoli opustí váš počítač, uvidíte vše, co by se odeslalo.",
     "report": "Nahlásit",
     "notNow": "Teď ne"
+  },
+  "character": {
+    "title": "Charakter",
+    "labelsAria": "Povahové vlastnosti",
+    "labels": {
+      "ModelProfessional": "Vzorový profesionál",
+      "Driven": "Ctižádostivý",
+      "Loyal": "Loajální",
+      "BigGamePlayer": "Hráč velkých zápasů",
+      "Consistent": "Vyrovnaný",
+      "Temperamental": "Temperamentní",
+      "InjuryProne": "Náchylný ke zranění",
+      "Balanced": "Vyvážený"
+    },
+    "traits": {
+      "professionalism": "Profesionalita",
+      "ambition": "Ctižádost",
+      "loyalty": "Loajalita",
+      "consistency": "Vyrovnanost",
+      "big_matches": "Velké zápasy",
+      "pressure_handling": "Zvládání tlaku",
+      "injury_proneness": "Náchylnost ke zranění",
+      "adaptability": "Přizpůsobivost"
+    }
+  },
+  "chemistry": {
+    "title": "Souhra týmu",
+    "cohesion": "Soudržnost",
+    "tacticalFamiliarity": "Taktická sehranost",
+    "neutral": "Neutrální",
+    "matchesTogether": "{{count}} společných zápasů",
+    "topPartnerships": "Klíčové dvojice",
+    "sharedMinutes": "{{count}} minut",
+    "assistantAdvice": "Poznámky asistenta",
+    "noDataYet": "Společnými zápasy zlepšíte souhru a taktickou sehranost.",
+    "adviceKinds": {
+      "StrongPartnership": "Silná spolupráce",
+      "WeakPartnership": "Slabá spolupráce",
+      "UnfamiliarShape": "Neznámé rozestavení"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} si dobře rozumí ({{value}}).",
+      "WeakPartnership": "{{players}} potřebují více času na sehrání ({{value}}).",
+      "UnfamiliarShape": "Tým si stále osvojuje {{formation}} ({{value}} %)."
+    }
   }
 }

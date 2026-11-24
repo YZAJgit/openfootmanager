@@ -47,6 +47,9 @@ fn visit_wire_roots(visitor: &mut impl TypeVisitor) {
     visitor.visit::<ofm_core::custom_tactics::TacticDifferences>();
     // `get_individual_plan_options` returns it; nothing in `Game` reaches it.
     visitor.visit::<ofm_core::training_feel::IndividualPlanOptions>();
+    // `get_player_character` and `get_team_chemistry` return them; skipped on `Game`/`Player`/`Team`.
+    visitor.visit::<openfootmanager_lib::PlayerCharacterView>();
+    visitor.visit::<openfootmanager_lib::TeamChemistryView>();
     visitor.visit::<engine::ShotMapEntry>();
     visitor.visit::<engine::PitchFrame2D>();
 }

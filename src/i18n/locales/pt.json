@@ -4799,5 +4799,50 @@
     "body": "A tua última sessão terminou com uma falha. Reportá-la ajuda-nos a corrigi-la — vais ver tudo o que seria enviado antes de algo sair do teu computador.",
     "report": "Reportar",
     "notNow": "Agora não"
+  },
+  "character": {
+    "title": "Caráter",
+    "labelsAria": "Traços de caráter",
+    "labels": {
+      "ModelProfessional": "Profissional exemplar",
+      "Driven": "Ambicioso",
+      "Loyal": "Leal",
+      "BigGamePlayer": "Jogador de grandes jogos",
+      "Consistent": "Consistente",
+      "Temperamental": "Impulsivo",
+      "InjuryProne": "Propenso a lesões",
+      "Balanced": "Equilibrado"
+    },
+    "traits": {
+      "professionalism": "Profissionalismo",
+      "ambition": "Ambição",
+      "loyalty": "Lealdade",
+      "consistency": "Consistência",
+      "big_matches": "Grandes jogos",
+      "pressure_handling": "Gestão da pressão",
+      "injury_proneness": "Propensão a lesões",
+      "adaptability": "Adaptabilidade"
+    }
+  },
+  "chemistry": {
+    "title": "Entrosamento da equipa",
+    "cohesion": "Coesão",
+    "tacticalFamiliarity": "Familiaridade tática",
+    "neutral": "Neutro",
+    "matchesTogether": "{{count}} jogos juntos",
+    "topPartnerships": "Parcerias principais",
+    "sharedMinutes": "{{count}} minutos",
+    "assistantAdvice": "Notas do adjunto",
+    "noDataYet": "Joguem juntos para melhorar o entendimento em campo e a familiaridade tática.",
+    "adviceKinds": {
+      "StrongPartnership": "Parceria forte",
+      "WeakPartnership": "Parceria fraca",
+      "UnfamiliarShape": "Esquema pouco familiar"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} combinam bem ({{value}}).",
+      "WeakPartnership": "{{players}} ainda precisam de tempo para se entenderem ({{value}}).",
+      "UnfamiliarShape": "A equipa ainda está a aprender o {{formation}} ({{value}}%)."
+    }
   }
 }

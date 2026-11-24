@@ -62,6 +62,10 @@ vi.mock("../../hooks/useRatingTiers", async () => {
   return cannedRatingTiersModule();
 });
 
+vi.mock("../../services/chemistryService", () => ({
+  getTeamChemistry: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));

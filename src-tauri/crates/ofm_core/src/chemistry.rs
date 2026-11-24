@@ -11,6 +11,8 @@ use std::collections::{HashMap, HashSet};
 use domain::character::{FAMILIARITY_MAX, PairChemistry, TeamTacticalFamiliarity};
 use domain::player::Player;
 use domain::team::Team;
+use serde::Serialize;
+use ts_rs::TS;
 
 /// The most cohesion moves a side's play either way.
 const COHESION_RANGE: f64 = 0.04;
@@ -209,7 +211,7 @@ pub fn update_tactical_familiarity(team: &mut Team) {
 }
 
 /// What the assistant can say about a side's understanding, by kind; the screen words it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 pub enum AdviceKind {
     /// Two starters who understand each other well: keep them together.
     StrongPartnership,
@@ -272,7 +274,11 @@ pub fn assistant_chemistry_advice(
     let familiarity = &team.tactical_familiarity;
     let known = familiarity.formation == team.formation;
     if !familiarity.formation.is_empty() && (!known || familiarity.familiarity < UNFAMILIAR_BELOW) {
-        let value = if known { familiarity.familiarity } else { 0.0 };
+        let value = if known {
+            familiarity.familiarity
+        } else {
+            familiarity.familiarity * FAMILIARITY_KEPT_ON_CHANGE
+        };
         advice.push(AssistantAdvice {
             kind: AdviceKind::UnfamiliarShape,
             player_ids: Vec::new(),
@@ -563,6 +569,17 @@ mod tests {
         );
         team.formation = formation.into();
         team
+    }
+
+    /// Given a formation switch with prior familiarity
+    /// When the assistant advises on the new formation
+    /// Then the advice reports the carried familiarity
+    #[test]
+    fn assistant_reports_familiarity_carried_to_new_shape() {
+        let mut side = team("4-3-3");
+        side.tactical_familiarity = TeamTacticalFamiliarity::new("4-4-2", 75.0, 5);
+        let advice = assistant_chemistry_advice(&[], &side, &[]);
+        assert_eq!(advice[0].value, 30);
     }
 
     /// Given a side first seen, then playing the same shape, then changing shape

@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { type GameStateData, useGameStore } from "../../store/gameStore";
 import type { PlayerSelectionOptions } from "../../store/gameStore";
 import { useFetchedSquad } from "../../hooks/useFetchedSquad";
+import SquadChemistryCard from "./SquadChemistryCard";
 import SquadRosterView from "./SquadRosterView";
 import type { SquadListSortState } from "./SquadRosterView.state";
 
@@ -48,16 +49,21 @@ export default function SquadTab({
     return <p className="text-gray-500 dark:text-gray-400">{t("common.unemployed")}</p>;
   }
 
+  const chemistryRefreshKey = `${team.id}|${team.formation}|${(team.starting_xi_ids ?? []).join(",")}|${clockDate}|${players.map((p) => `${p.id}:${p.injury ? 1 : 0}`).join(",")}`;
+
   return (
-    <SquadRosterView
-      players={players}
-      squadAnswered={squadAnswered}
-      team={team}
-      clockDate={clockDate}
-      onSelectPlayer={onSelectPlayer}
-      onMutationComplete={handleMutationComplete}
-      sortState={sortState}
-      onSortStateChange={onSortStateChange}
-    />
+    <div className="flex flex-col gap-4">
+      <SquadChemistryCard refreshKey={chemistryRefreshKey} />
+      <SquadRosterView
+        players={players}
+        squadAnswered={squadAnswered}
+        team={team}
+        clockDate={clockDate}
+        onSelectPlayer={onSelectPlayer}
+        onMutationComplete={handleMutationComplete}
+        sortState={sortState}
+        onSortStateChange={onSortStateChange}
+      />
+    </div>
   );
 }

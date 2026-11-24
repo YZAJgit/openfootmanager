@@ -116,6 +116,11 @@ export default function PlayerProfileTabs({
           player={player}
           language={i18n.language}
           showsPrivateState={knowledge.showsPrivateState}
+          characterRefreshKey={JSON.stringify([
+            player.team_id,
+            knowledge.showsPrivateState,
+            knowledge.scoutedReport,
+          ])}
           recentMatches={data.recentMatches}
           recentMatchesStatus={data.recentMatchesStatus}
           retryRecentMatches={data.retryRecentMatches}

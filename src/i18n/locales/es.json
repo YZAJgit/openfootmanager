@@ -4799,5 +4799,50 @@
     "body": "Tu última sesión terminó con un fallo. Informar de ello nos ayuda a arreglarlo: verás todo lo que se enviaría antes de que nada salga de tu ordenador.",
     "report": "Informar",
     "notNow": "Ahora no"
+  },
+  "character": {
+    "title": "Carácter",
+    "labelsAria": "Rasgos de carácter",
+    "labels": {
+      "ModelProfessional": "Profesional ejemplar",
+      "Driven": "Ambicioso",
+      "Loyal": "Leal",
+      "BigGamePlayer": "Jugador de grandes partidos",
+      "Consistent": "Regular",
+      "Temperamental": "Volátil",
+      "InjuryProne": "Propenso a lesiones",
+      "Balanced": "Equilibrado"
+    },
+    "traits": {
+      "professionalism": "Profesionalidad",
+      "ambition": "Ambición",
+      "loyalty": "Lealtad",
+      "consistency": "Regularidad",
+      "big_matches": "Grandes partidos",
+      "pressure_handling": "Gestión de la presión",
+      "injury_proneness": "Propensión a lesiones",
+      "adaptability": "Adaptabilidad"
+    }
+  },
+  "chemistry": {
+    "title": "Complicidad del equipo",
+    "cohesion": "Cohesión",
+    "tacticalFamiliarity": "Familiaridad táctica",
+    "neutral": "Neutro",
+    "matchesTogether": "{{count}} partidos juntos",
+    "topPartnerships": "Parejas clave",
+    "sharedMinutes": "{{count}} minutos",
+    "assistantAdvice": "Notas del ayudante",
+    "noDataYet": "Jugad partidos juntos para mejorar el entendimiento y la familiaridad táctica.",
+    "adviceKinds": {
+      "StrongPartnership": "Buena asociación",
+      "WeakPartnership": "Asociación débil",
+      "UnfamiliarShape": "Sistema desconocido"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} combinan bien ({{value}}).",
+      "WeakPartnership": "{{players}} necesitan más tiempo para compenetrarse ({{value}}).",
+      "UnfamiliarShape": "El equipo aún está aprendiendo {{formation}} ({{value}} %)."
+    }
   }
 }

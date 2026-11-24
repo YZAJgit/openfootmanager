@@ -1,4 +1,5 @@
 import type { SupportedLanguageCode } from "../../i18n";
+import type { TeamChemistryView } from "../../store/generated/TeamChemistryView";
 import type { SettingsResponse } from "../../store/settingsStore";
 import type { StyleGuideOptions } from "../styleGuide/styleGuideOptions";
 import * as fixture from "./fixture.generated";
@@ -112,6 +113,7 @@ function profileHandlers(profile: HarnessProfile): CommandHandlers {
     get_retired_player: ({ playerId }) => about(playerId, answer.retiredPlayer),
     get_player_stats_overview: ({ playerId }) => about(playerId, answer.seasonStats),
     get_player_career: ({ playerId }) => about(playerId, answer.career),
+    get_player_character: ({ playerId }) => about(playerId, answer.character),
     // The page asks for its last `limit` matches, latest first.
     get_player_match_history: ({ playerId, limit }) =>
       about(
@@ -145,6 +147,21 @@ export function fixtureHandlers(
       })),
     get_club_league_standing: ({ teamId }) => forUserClub(teamId, () => fixture.clubLeagueStanding),
     get_squad: ({ teamId }) => forUserClub(teamId, () => fixture.squad),
+    get_team_chemistry: (): TeamChemistryView => {
+      const userTeam = fixture.gameState.teams.find((team) => team.id === USER_CLUB);
+      return {
+        cohesion_factor: 1.0,
+        familiarity_factor: 1.0,
+        formation: userTeam?.formation ?? "4-4-2",
+        tactical_familiarity: {
+          formation: "",
+          familiarity: 0,
+          matches_together: 0,
+        },
+        advice: [],
+        top_pairs: [],
+      };
+    },
     // The user's club only, as in the Rust command.
     get_squad_fitness: () => fixture.squadFitness,
     get_available_jobs: () => fixture.availableJobs,

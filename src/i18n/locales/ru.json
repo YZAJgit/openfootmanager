@@ -4799,5 +4799,50 @@
     "body": "Ваша прошлая сессия завершилась сбоем. Сообщив о нём, вы поможете его исправить — вы увидите всё, что будет отправлено, прежде чем что-либо покинет ваш компьютер.",
     "report": "Сообщить",
     "notNow": "Не сейчас"
+  },
+  "character": {
+    "title": "Характер",
+    "labelsAria": "Черты характера",
+    "labels": {
+      "ModelProfessional": "Образцовый профессионал",
+      "Driven": "Целеустремлённый",
+      "Loyal": "Преданный",
+      "BigGamePlayer": "Игрок больших матчей",
+      "Consistent": "Стабильный",
+      "Temperamental": "Вспыльчивый",
+      "InjuryProne": "Склонен к травмам",
+      "Balanced": "Уравновешенный"
+    },
+    "traits": {
+      "professionalism": "Профессионализм",
+      "ambition": "Амбиции",
+      "loyalty": "Преданность",
+      "consistency": "Стабильность",
+      "big_matches": "Важные матчи",
+      "pressure_handling": "Игра под давлением",
+      "injury_proneness": "Склонность к травмам",
+      "adaptability": "Адаптивность"
+    }
+  },
+  "chemistry": {
+    "title": "Сыгранность команды",
+    "cohesion": "Сплочённость",
+    "tacticalFamiliarity": "Знание тактики",
+    "neutral": "Нейтрально",
+    "matchesTogether": "Совместных матчей: {{count}}",
+    "topPartnerships": "Ключевые связки",
+    "sharedMinutes": "{{count}} мин",
+    "assistantAdvice": "Заметки помощника",
+    "noDataYet": "Играйте вместе, чтобы улучшить взаимопонимание на поле и знание тактики.",
+    "adviceKinds": {
+      "StrongPartnership": "Сильная связка",
+      "WeakPartnership": "Слабая связка",
+      "UnfamiliarShape": "Незнакомая схема"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} хорошо взаимодействуют ({{value}}).",
+      "WeakPartnership": "{{players}} нужно больше времени, чтобы сыграться ({{value}}).",
+      "UnfamiliarShape": "Команда всё ещё осваивает {{formation}} ({{value}}%)."
+    }
   }
 }

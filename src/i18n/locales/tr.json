@@ -4799,5 +4799,50 @@
     "body": "Son oturumun bir çökmeyle sona erdi. Bunu bildirmen düzeltmemize yardım eder — bilgisayarından herhangi bir şey çıkmadan önce gönderilecek her şeyi göreceksin.",
     "report": "Bildir",
     "notNow": "Şimdi değil"
+  },
+  "character": {
+    "title": "Karakter",
+    "labelsAria": "Karakter etiketleri",
+    "labels": {
+      "ModelProfessional": "Örnek profesyonel",
+      "Driven": "Hırslı",
+      "Loyal": "Sadık",
+      "BigGamePlayer": "Büyük maç oyuncusu",
+      "Consistent": "İstikrarlı",
+      "Temperamental": "Fevri",
+      "InjuryProne": "Sakatlığa yatkın",
+      "Balanced": "Dengeli"
+    },
+    "traits": {
+      "professionalism": "Profesyonellik",
+      "ambition": "Hırs",
+      "loyalty": "Sadakat",
+      "consistency": "İstikrar",
+      "big_matches": "Büyük maçlar",
+      "pressure_handling": "Baskıyla başa çıkma",
+      "injury_proneness": "Sakatlığa yatkınlık",
+      "adaptability": "Uyum yeteneği"
+    }
+  },
+  "chemistry": {
+    "title": "Takım Uyumu",
+    "cohesion": "Kadro kaynaşması",
+    "tacticalFamiliarity": "Taktik Yatkınlığı",
+    "neutral": "Nötr",
+    "matchesTogether": "Birlikte {{count}} maç",
+    "topPartnerships": "Öne Çıkan İkililer",
+    "sharedMinutes": "{{count}} dk",
+    "assistantAdvice": "Yardımcı Antrenör Notları",
+    "noDataYet": "Saha içi uyum ve taktik yatkınlığı kazanmak için birlikte maç yapın.",
+    "adviceKinds": {
+      "StrongPartnership": "Güçlü ortaklık",
+      "WeakPartnership": "Zayıf uyum",
+      "UnfamiliarShape": "Alışılmamış diziliş"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} sahada çok iyi anlaşıyor ({{value}}).",
+      "WeakPartnership": "{{players}} henüz tam uyum yakalayamadı ({{value}}).",
+      "UnfamiliarShape": "Kadro {{formation}} dizilişine henüz alışıyor (%{{value}})."
+    }
   }
 }

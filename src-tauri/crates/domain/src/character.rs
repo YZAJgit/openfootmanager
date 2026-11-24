@@ -6,6 +6,7 @@
 //! made together. It is never a statement about two real people's personal relationship.
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// The lowest and highest a character trait reads.
 pub const TRAIT_MIN: u8 = 1;
@@ -14,7 +15,7 @@ pub const TRAIT_MAX: u8 = 99;
 pub const TRAIT_NEUTRAL: u8 = 50;
 
 /// Eight traits of a player's character, each `1..=99`; 50 is the average player.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(default)]
 pub struct CharacterProfile {
     pub professionalism: u8,
@@ -67,7 +68,7 @@ impl CharacterProfile {
 
 /// A one-word summary of a character, for a scout report or a squad list. A profile may carry
 /// several; `Balanced` only when it carries no other.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub enum CharacterLabel {
     ModelProfessional,
     Driven,
@@ -140,7 +141,7 @@ pub const FAMILIARITY_MAX: f32 = 100.0;
 
 /// How well a side knows the formation it plays: 0 for a shape it has never played, 100 for one
 /// it plays in its sleep.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]
 pub struct TeamTacticalFamiliarity {
     /// The formation the familiarity was built in; empty before the side's first match.

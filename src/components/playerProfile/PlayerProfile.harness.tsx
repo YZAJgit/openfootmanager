@@ -237,6 +237,10 @@ export function defaultInvokeResponse(command: string) {
     return { by_season: [], by_club: [], totals: { appearances: 0, goals: 0, assists: 0 } };
   }
 
+  if (command === "get_player_character") {
+    return { known: false, labels: [], profile: null };
+  }
+
   return createGameState(createPlayer());
 }
 

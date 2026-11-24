@@ -4799,5 +4799,50 @@
     "body": "La tua ultima sessione è terminata con un arresto anomalo. Segnalarlo ci aiuta a risolverlo: vedrai tutto ciò che verrebbe inviato prima che qualcosa lasci il tuo computer.",
     "report": "Segnala",
     "notNow": "Non ora"
+  },
+  "character": {
+    "title": "Carattere",
+    "labelsAria": "Tratti caratteriali",
+    "labels": {
+      "ModelProfessional": "Professionista esemplare",
+      "Driven": "Ambizioso",
+      "Loyal": "Leale",
+      "BigGamePlayer": "Uomo delle grandi partite",
+      "Consistent": "Costante",
+      "Temperamental": "Temperamentale",
+      "InjuryProne": "Incline agli infortuni",
+      "Balanced": "Equilibrato"
+    },
+    "traits": {
+      "professionalism": "Professionalità",
+      "ambition": "Ambizione",
+      "loyalty": "Lealtà",
+      "consistency": "Costanza",
+      "big_matches": "Grandi partite",
+      "pressure_handling": "Gestione della pressione",
+      "injury_proneness": "Propensione agli infortuni",
+      "adaptability": "Adattabilità"
+    }
+  },
+  "chemistry": {
+    "title": "Intesa di squadra",
+    "cohesion": "Coesione",
+    "tacticalFamiliarity": "Familiarità tattica",
+    "neutral": "Neutrale",
+    "matchesTogether": "{{count}} partite insieme",
+    "topPartnerships": "Coppie chiave",
+    "sharedMinutes": "{{count}} minuti",
+    "assistantAdvice": "Note del vice",
+    "noDataYet": "Giocate insieme per migliorare intesa e familiarità tattica.",
+    "adviceKinds": {
+      "StrongPartnership": "Buona intesa",
+      "WeakPartnership": "Intesa debole",
+      "UnfamiliarShape": "Modulo poco familiare"
+    },
+    "adviceText": {
+      "StrongPartnership": "{{players}} si intendono bene ({{value}}).",
+      "WeakPartnership": "{{players}} hanno ancora bisogno di tempo ({{value}}).",
+      "UnfamiliarShape": "La squadra sta ancora imparando il {{formation}} ({{value}}%)."
+    }
   }
 }

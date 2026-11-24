@@ -1,15 +1,23 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use serde::Serialize;
 use tauri::State;
+use ts_rs::TS;
 
+use domain::character::{CharacterLabel, CharacterProfile, TeamTacticalFamiliarity};
 use domain::message::InboxMessage;
+use domain::player::Player;
+use ofm_core::character::{assessed_character, character_labels};
+use ofm_core::chemistry::{
+    assistant_chemistry_advice, familiarity_match_factor, team_cohesion_factor, AdviceKind,
+};
 use ofm_core::familiarity_projection::{familiarity_projection, FamiliarityProjection};
 use ofm_core::manager_standing::{manager_standing, ManagerStanding};
 use ofm_core::player_career::{player_career, PlayerCareer};
 use ofm_core::player_knowledge::{
-    players_knowledge, potential_opinion, visible_wage, youth_prospect_opinions, PlayerKnowledge,
-    VisibleWage,
+    player_knowledge, players_knowledge, potential_opinion, visible_wage, youth_prospect_opinions,
+    PlayerKnowledge, VisibleWage,
 };
 use ofm_core::position_ratings::{position_ratings, PositionRatings};
 use ofm_core::potential_opinion::PotentialOpinion;
@@ -378,6 +386,207 @@ fn get_youth_prospect_opinions_internal(
     state
         .get_game(|game| youth_prospect_opinions(game, message_id))
         .ok_or_else(|| NO_ACTIVE_GAME.to_string())
+}
+
+const TOP_CHEMISTRY_PAIRS_LIMIT: usize = 6;
+
+/// One player's character labels and traits as the manager's club is allowed to see them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct PlayerCharacterView {
+    pub known: bool,
+    pub labels: Vec<CharacterLabel>,
+    pub profile: Option<CharacterProfile>,
+}
+
+/// One piece of assistant chemistry advice with player display names resolved for the UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct AssistantAdviceView {
+    pub kind: AdviceKind,
+    pub player_ids: Vec<String>,
+    pub player_names: Vec<String>,
+    pub value: i32,
+}
+
+/// One own-club on-pitch partnership with resolved player names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct PairChemistryView {
+    pub player_a_id: String,
+    pub player_a_name: String,
+    pub player_b_id: String,
+    pub player_b_name: String,
+    pub bond: i8,
+    pub shared_minutes: u32,
+}
+
+/// On-pitch cohesion, formation familiarity, top partnerships, and assistant notes for the active XI.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+pub struct TeamChemistryView {
+    pub cohesion_factor: f64,
+    pub familiarity_factor: f64,
+    pub formation: String,
+    pub tactical_familiarity: TeamTacticalFamiliarity,
+    pub advice: Vec<AssistantAdviceView>,
+    pub top_pairs: Vec<PairChemistryView>,
+}
+
+/// Read-only projection of one player's character traits and summary labels, gated by club knowledge.
+#[tauri::command]
+pub async fn get_player_character(
+    state: State<'_, Arc<StateManager>>,
+    player_id: String,
+) -> Result<Option<PlayerCharacterView>, String> {
+    get_player_character_internal(&state, &player_id)
+}
+
+pub fn get_player_character_internal(
+    state: &StateManager,
+    player_id: &str,
+) -> Result<Option<PlayerCharacterView>, String> {
+    state
+        .get_game(|game| project_player_character(game, player_id))
+        .ok_or_else(|| NO_ACTIVE_GAME.to_string())
+}
+
+fn project_player_character(
+    game: &ofm_core::game::Game,
+    player_id: &str,
+) -> Option<PlayerCharacterView> {
+    let player = game.players.iter().find(|p| p.id == player_id)?;
+    if matches!(player_knowledge(game, player), PlayerKnowledge::Unknown) {
+        return Some(PlayerCharacterView {
+            known: false,
+            labels: Vec::new(),
+            profile: None,
+        });
+    }
+    let profile = assessed_character(player, game.seed);
+    let labels = character_labels(&profile);
+    Some(PlayerCharacterView {
+        known: true,
+        labels,
+        profile: Some(profile),
+    })
+}
+
+/// Read-only projection of team cohesion, tactical familiarity, key partnerships, and assistant notes.
+#[tauri::command]
+pub async fn get_team_chemistry(
+    state: State<'_, Arc<StateManager>>,
+) -> Result<Option<TeamChemistryView>, String> {
+    get_team_chemistry_internal(&state)
+}
+
+pub fn get_team_chemistry_internal(
+    state: &StateManager,
+) -> Result<Option<TeamChemistryView>, String> {
+    state
+        .get_game(project_team_chemistry)
+        .ok_or_else(|| NO_ACTIVE_GAME.to_string())
+}
+
+fn project_team_chemistry(game: &ofm_core::game::Game) -> Option<TeamChemistryView> {
+    let team_id = game.manager.team_id.as_deref()?;
+    let team = game.teams.iter().find(|t| t.id == team_id)?;
+    let players_by_id: HashMap<&str, &Player> =
+        game.players.iter().map(|p| (p.id.as_str(), p)).collect();
+    let (formation, xi_players) = resolve_active_xi(game, team, &players_by_id);
+
+    let cohesion_factor = team_cohesion_factor(&game.pair_chemistry, &xi_players);
+    let familiarity_factor = familiarity_match_factor(&team.tactical_familiarity, &formation);
+    let advice = assistant_chemistry_advice(&game.pair_chemistry, team, &xi_players)
+        .into_iter()
+        .map(|item| {
+            let player_names = item
+                .player_ids
+                .iter()
+                .map(|id| display_name_for(&players_by_id, id))
+                .collect();
+            AssistantAdviceView {
+                kind: item.kind,
+                player_ids: item.player_ids,
+                player_names,
+                value: item.value,
+            }
+        })
+        .collect();
+    let top_pairs = project_top_pairs(game, team_id, &players_by_id);
+
+    Some(TeamChemistryView {
+        cohesion_factor,
+        familiarity_factor,
+        formation,
+        tactical_familiarity: team.tactical_familiarity.clone(),
+        advice,
+        top_pairs,
+    })
+}
+
+fn resolve_active_xi<'a>(
+    game: &'a ofm_core::game::Game,
+    team: &domain::team::Team,
+    players_by_id: &HashMap<&str, &'a Player>,
+) -> (String, Vec<&'a Player>) {
+    if let Ok(lineup) = tactics_lineup(game) {
+        let xi = lineup
+            .eleven
+            .iter()
+            .filter_map(|slot| players_by_id.get(slot.player_id.as_str()).copied())
+            .collect();
+        return (lineup.formation, xi);
+    }
+    let xi = team
+        .starting_xi_ids
+        .iter()
+        .filter_map(|id| players_by_id.get(id.as_str()).copied())
+        .collect();
+    (team.formation.clone(), xi)
+}
+
+fn project_top_pairs(
+    game: &ofm_core::game::Game,
+    team_id: &str,
+    players_by_id: &HashMap<&str, &Player>,
+) -> Vec<PairChemistryView> {
+    let own_ids: HashSet<&str> = game
+        .players
+        .iter()
+        .filter(|p| p.team_id.as_deref() == Some(team_id))
+        .map(|p| p.id.as_str())
+        .collect();
+    let mut own_pairs: Vec<&domain::character::PairChemistry> = game
+        .pair_chemistry
+        .iter()
+        .filter(|pair| {
+            own_ids.contains(pair.player_a.as_str()) && own_ids.contains(pair.player_b.as_str())
+        })
+        .collect();
+    own_pairs.sort_by(|a, b| {
+        b.bond
+            .unsigned_abs()
+            .cmp(&a.bond.unsigned_abs())
+            .then_with(|| b.shared_minutes.cmp(&a.shared_minutes))
+            .then_with(|| a.player_a.cmp(&b.player_a))
+            .then_with(|| a.player_b.cmp(&b.player_b))
+    });
+    own_pairs
+        .into_iter()
+        .take(TOP_CHEMISTRY_PAIRS_LIMIT)
+        .map(|pair| PairChemistryView {
+            player_a_id: pair.player_a.clone(),
+            player_a_name: display_name_for(players_by_id, &pair.player_a),
+            player_b_id: pair.player_b.clone(),
+            player_b_name: display_name_for(players_by_id, &pair.player_b),
+            bond: pair.bond,
+            shared_minutes: pair.shared_minutes,
+        })
+        .collect()
+}
+
+fn display_name_for(players_by_id: &HashMap<&str, &Player>, player_id: &str) -> String {
+    players_by_id
+        .get(player_id)
+        .map(|p| p.match_name.clone())
+        .unwrap_or_else(|| player_id.to_string())
 }
 
 #[cfg(test)]
@@ -1192,5 +1401,259 @@ mod tests {
             get_familiarity_internal(&state),
             Err("be.error.noTeamAssigned".to_string())
         );
+    }
+
+    fn chemistry_test_player(id: &str, name: &str, club: Option<&str>) -> Player {
+        use domain::player::{PlayerAttributes, Position};
+        let attrs: PlayerAttributes = serde_json::from_value(serde_json::json!({
+            "pace": 65, "stamina": 65, "strength": 65, "agility": 65, "passing": 65,
+            "shooting": 65, "tackling": 65, "dribbling": 65, "defending": 65,
+            "positioning": 65, "vision": 65, "decisions": 65, "composure": 65,
+            "aggression": 65, "teamwork": 65, "leadership": 65,
+            "handling": 65, "reflexes": 65, "aerial": 65
+        }))
+        .unwrap();
+        let mut player = Player::new(
+            id.into(),
+            name.into(),
+            name.into(),
+            "1999-05-01".into(),
+            "GB".into(),
+            Position::CentralMidfielder,
+            attrs,
+        );
+        player.team_id = club.map(str::to_string);
+        player
+    }
+
+    /// Given no active game, when the character adapter reads a player,
+    /// then the translated session error is returned.
+    #[test]
+    fn the_character_adapter_reports_a_missing_session() {
+        assert_eq!(
+            get_player_character_internal(&StateManager::new(), "p1").unwrap_err(),
+            NO_ACTIVE_GAME
+        );
+    }
+
+    /// Given an own-club player, a scouted player, an unknown player, and an id no player has
+    /// When the character adapter reads each
+    /// Then own and scouted return assessed traits and labels, unknown hides them, and missing is None
+    #[test]
+    fn the_character_adapter_respects_player_visibility() {
+        use chrono::TimeZone;
+        use domain::manager::Manager;
+
+        let mut own = chemistry_test_player("own", "Own Star", Some("mine"));
+        own.character = CharacterProfile {
+            professionalism: 90,
+            ambition: 85,
+            ..CharacterProfile::default()
+        };
+        let scouted = chemistry_test_player("scouted", "Scouted Target", Some("faraway"));
+        let mut stranger = chemistry_test_player("stranger", "Hidden Stranger", Some("faraway"));
+        stranger.character = CharacterProfile {
+            loyalty: 95,
+            ..CharacterProfile::default()
+        };
+
+        let mut manager = Manager::new(
+            "m".into(),
+            "M".into(),
+            "Gr".into(),
+            "1980-01-01".into(),
+            "GB".into(),
+        );
+        manager.team_id = Some("mine".into());
+
+        let mut game = ofm_core::game::Game::new(
+            ofm_core::clock::GameClock::new(
+                chrono::Utc.with_ymd_and_hms(2026, 9, 15, 12, 0, 0).unwrap(),
+            ),
+            manager,
+            vec![],
+            vec![own, scouted.clone(), stranger],
+            vec![],
+            vec![],
+        );
+        game.seed = 42;
+        game.scouted_players.push(ofm_core::game::ScoutedPlayer {
+            player_id: "scouted".into(),
+            scouted_on: "2026-09-01".into(),
+            attributes: scouted.attributes,
+            potential: None,
+            scout_name: None,
+        });
+        let state = StateManager::new();
+        state.set_game(game);
+
+        let own_view = get_player_character_internal(&state, "own")
+            .unwrap()
+            .expect("own player exists");
+        assert!(own_view.known);
+        assert!(own_view.labels.contains(&CharacterLabel::ModelProfessional));
+        assert!(own_view.labels.contains(&CharacterLabel::Driven));
+        assert_eq!(own_view.profile.unwrap().professionalism, 90);
+
+        let scouted_view = get_player_character_internal(&state, "scouted")
+            .unwrap()
+            .expect("scouted player exists");
+        assert!(scouted_view.known);
+        assert!(!scouted_view.labels.is_empty());
+        assert!(scouted_view.profile.is_some());
+
+        let unknown_view = get_player_character_internal(&state, "stranger")
+            .unwrap()
+            .expect("unknown player exists");
+        assert!(!unknown_view.known);
+        assert!(unknown_view.labels.is_empty());
+        assert!(unknown_view.profile.is_none());
+
+        assert_eq!(get_player_character_internal(&state, "nobody"), Ok(None));
+    }
+
+    /// Given no active game, and then an unemployed manager
+    /// When the team chemistry adapter reads it
+    /// Then the first returns the session error and the second returns None
+    #[test]
+    fn the_team_chemistry_adapter_handles_missing_session_and_unemployed_manager() {
+        use chrono::TimeZone;
+        use domain::manager::Manager;
+
+        let state = StateManager::new();
+        assert_eq!(
+            get_team_chemistry_internal(&state).unwrap_err(),
+            NO_ACTIVE_GAME
+        );
+
+        let game = ofm_core::game::Game::new(
+            ofm_core::clock::GameClock::new(
+                chrono::Utc.with_ymd_and_hms(2026, 9, 15, 12, 0, 0).unwrap(),
+            ),
+            Manager::new(
+                "m".into(),
+                "M".into(),
+                "Gr".into(),
+                "1980-01-01".into(),
+                "GB".into(),
+            ),
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        );
+        state.set_game(game);
+        assert_eq!(get_team_chemistry_internal(&state), Ok(None));
+    }
+
+    /// Given a fresh save with no matches played, and then a save with partnerships and an unfamiliar shape
+    /// When the team chemistry adapter reads each
+    /// Then the fresh save is neutral with empty pairs/advice, and the populated save returns sorted
+    ///      own-club top pairs, resolved names, and assistant advice
+    #[test]
+    fn the_team_chemistry_adapter_projects_empty_and_populated_chemistry() {
+        use chrono::TimeZone;
+        use domain::character::PairChemistry;
+        use domain::manager::Manager;
+        use domain::team::Team;
+
+        let mut team = Team::new(
+            "mine".into(),
+            "Mine FC".into(),
+            "MIN".into(),
+            "ENG".into(),
+            "City".into(),
+            "Ground".into(),
+            15_000,
+        );
+        team.formation = "4-4-2".into();
+        let players: Vec<Player> = (0..11)
+            .map(|i| chemistry_test_player(&format!("p{i}"), &format!("Player {i}"), Some("mine")))
+            .chain([
+                chemistry_test_player("r0", "Rival 0", Some("other")),
+                chemistry_test_player("r1", "Rival 1", Some("other")),
+            ])
+            .collect();
+        team.starting_xi_ids = (0..11).map(|i| format!("p{i}")).collect();
+
+        let mut manager = Manager::new(
+            "m".into(),
+            "M".into(),
+            "Gr".into(),
+            "1980-01-01".into(),
+            "GB".into(),
+        );
+        manager.team_id = Some("mine".into());
+
+        let game = ofm_core::game::Game::new(
+            ofm_core::clock::GameClock::new(
+                chrono::Utc.with_ymd_and_hms(2026, 9, 15, 12, 0, 0).unwrap(),
+            ),
+            manager,
+            vec![team],
+            players,
+            vec![],
+            vec![],
+        );
+        let state = StateManager::new();
+        state.set_game(game);
+
+        let empty_view = get_team_chemistry_internal(&state)
+            .unwrap()
+            .expect("managed team exists");
+        assert!((empty_view.cohesion_factor - 1.0).abs() < 1e-12);
+        assert!((empty_view.familiarity_factor - 1.0).abs() < 1e-12);
+        assert_eq!(empty_view.formation, "4-4-2");
+        assert_eq!(empty_view.tactical_familiarity.matches_together, 0);
+        assert!(empty_view.top_pairs.is_empty());
+        assert!(empty_view.advice.is_empty());
+
+        state.update_game(|game| {
+            game.teams[0].tactical_familiarity = TeamTacticalFamiliarity::new("4-4-2", 25.0, 2);
+            let mut pairs = vec![
+                PairChemistry::new("p0", "p1", 900, 65),
+                PairChemistry::new("p2", "p3", 360, -35),
+                PairChemistry::new("p4", "p5", 270, 20),
+                PairChemistry::new("p6", "p7", 180, 10),
+                PairChemistry::new("p8", "p9", 180, 8),
+                PairChemistry::new("p0", "p2", 90, 5),
+                PairChemistry::new("p1", "p3", 90, 2),
+                // Rival pair must be excluded from own-club top_pairs.
+                PairChemistry::new("r0", "r1", 1200, 95),
+            ];
+            pairs.sort_by(|a, b| (&a.player_a, &a.player_b).cmp(&(&b.player_a, &b.player_b)));
+            game.pair_chemistry = pairs;
+        });
+
+        let populated = get_team_chemistry_internal(&state)
+            .unwrap()
+            .expect("managed team exists");
+        assert_eq!(populated.top_pairs.len(), TOP_CHEMISTRY_PAIRS_LIMIT);
+        assert_eq!(populated.top_pairs[0].player_a_id, "p0");
+        assert_eq!(populated.top_pairs[0].player_a_name, "Player 0");
+        assert_eq!(populated.top_pairs[0].player_b_name, "Player 1");
+        assert_eq!(populated.top_pairs[0].bond, 65);
+        assert_eq!(populated.top_pairs[1].bond, -35);
+        assert!(populated
+            .top_pairs
+            .iter()
+            .all(|pair| pair.player_a_id != "r0" && pair.player_b_id != "r1"));
+        assert!(populated.familiarity_factor < 1.0);
+        assert!(populated
+            .advice
+            .iter()
+            .any(|a| a.kind == AdviceKind::StrongPartnership
+                && a.player_names == vec!["Player 0", "Player 1"]
+                && a.value == 65));
+        assert!(populated
+            .advice
+            .iter()
+            .any(|a| a.kind == AdviceKind::WeakPartnership
+                && a.player_names == vec!["Player 2", "Player 3"]
+                && a.value == -35));
+        assert!(populated
+            .advice
+            .iter()
+            .any(|a| a.kind == AdviceKind::UnfamiliarShape && a.value == 25));
     }
 }

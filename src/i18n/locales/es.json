@@ -1111,6 +1111,24 @@
         "3": "Cantera",
         "4": "Recuperación"
       }
+    },
+    "individualPlans": {
+      "title": "Planes de desarrollo individual",
+      "description": "Asigna planes específicos hasta a {{max}} jugadores y empareja a los jóvenes con mentores veteranos.",
+      "slotCount": "{{count}} / {{max}} planes",
+      "empty": "No hay planes de desarrollo individual activos. Elige un jugador abajo para crear uno.",
+      "selectPlayer": "Seleccionar jugador",
+      "mentorLabel": "Mentor veterano (opcional)",
+      "noMentor": "Sin mentor",
+      "mentorOption": "{{name}} ({{age}} años)",
+      "mentorTag": "Tutelado por {{mentor}}",
+      "menteeAgeHint": "La tutela está disponible para jugadores jóvenes de 21 años o menos.",
+      "noEligibleMentors": "Ningún jugador veterano cumple actualmente los requisitos de mentor.",
+      "addPlan": "Añadir plan",
+      "updatePlan": "Actualizar plan",
+      "editPlan": "Editar",
+      "clearPlan": "Quitar",
+      "limitReached": "Los {{max}} cupos de plan están ocupados. Edita o quita un plan activo para cambiar."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "Este jugador no puede salir: el club se quedaría con menos de {{floor}} jugadores en la primera plantilla, el mínimo que un club debe mantener."
       },
       "training": {
-        "individual_plan_limit": "Un club puede tener como máximo 3 planes de desarrollo individuales activos a la vez."
+        "individual_plan_limit": "Un club puede tener como máximo 3 planes de desarrollo individuales activos a la vez.",
+        "invalid_focus": "Enfoque de entrenamiento no válido.",
+        "invalid_intensity": "Intensidad de entrenamiento no válida.",
+        "mentor_same_player": "Un jugador no puede ser su propio mentor.",
+        "mentor_not_in_club": "El mentor seleccionado no pertenece a tu club.",
+        "mentor_ineligible": "El mentor seleccionado no cumple los requisitos de veteranía y carácter para tutelar.",
+        "mentee_ineligible": "Solo se puede asignar un mentor a jugadores jóvenes de 21 años o menos."
       },
       "noActiveGameSession": "No hay una sesión de juego activa",
       "careerChanged": "La carrera cambió antes de poder guardar esto.",

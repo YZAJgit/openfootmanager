@@ -1111,6 +1111,24 @@
         "3": "Gençler",
         "4": "Toparlanma"
       }
+    },
+    "individualPlans": {
+      "title": "Bireysel Gelişim Planları",
+      "description": "En fazla {{max}} oyuncu için özel gelişim planı oluşturun ve genç yetenekleri deneyimli rehberlerle eşleştirin.",
+      "slotCount": "{{count}} / {{max}} plan",
+      "empty": "Aktif bireysel gelişim planı yok. Başlamak için aşağıdan bir oyuncu seçin.",
+      "selectPlayer": "Oyuncu seçin",
+      "mentorLabel": "Deneyimli rehber (isteğe bağlı)",
+      "noMentor": "Rehber yok",
+      "mentorOption": "{{name}} ({{age}} yaş)",
+      "mentorTag": "Rehber: {{mentor}}",
+      "menteeAgeHint": "Rehberlik yalnızca 21 yaş ve altı genç oyuncular için kullanılabilir.",
+      "noEligibleMentors": "Şu anda rehberlik şartlarını karşılayan deneyimli oyuncu yok.",
+      "addPlan": "Plan Ekle",
+      "updatePlan": "Planı Güncelle",
+      "editPlan": "Düzenle",
+      "clearPlan": "Kaldır",
+      "limitReached": "Tüm {{max}} plan kontenjanı dolu. Değişiklik için mevcut bir planı düzenleyin veya kaldırın."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "Bu oyuncu ayrılamaz: kulübün A takımında {{floor}} oyuncudan az kalır, bu da bir kulübün koruması gereken asgari sayıdır."
       },
       "training": {
-        "individual_plan_limit": "Bir kulüp aynı anda en fazla 3 bireysel gelişim planı yürütebilir."
+        "individual_plan_limit": "Bir kulüp aynı anda en fazla 3 bireysel gelişim planı yürütebilir.",
+        "invalid_focus": "Geçersiz antrenman odağı.",
+        "invalid_intensity": "Geçersiz antrenman yoğunluğu.",
+        "mentor_same_player": "Bir oyuncu kendisinin rehberi olamaz.",
+        "mentor_not_in_club": "Seçilen rehber kulübünüze ait değil.",
+        "mentor_ineligible": "Seçilen rehber rehberlik için gereken kıdem ve karakter şartlarını karşılamıyor.",
+        "mentee_ineligible": "Yalnızca 21 yaş ve altı genç oyunculara rehber atanabilir."
       },
       "noActiveGameSession": "Aktif oyun oturumu yok",
       "careerChanged": "Bu kaydedilemeden önce kariyer değişti.",

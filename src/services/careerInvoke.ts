@@ -29,6 +29,8 @@ export const SCREEN_WRITE_COMMANDS = [
   "set_training",
   "set_training_schedule",
   "set_training_groups",
+  "set_individual_development_plan",
+  "clear_individual_development_plan",
   "set_player_training_focus",
   "set_player_squad_role",
   "assign_jersey_number",

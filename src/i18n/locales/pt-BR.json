@@ -1111,6 +1111,24 @@
         "3": "Base",
         "4": "Recuperação"
       }
+    },
+    "individualPlans": {
+      "title": "Planos de desenvolvimento individual",
+      "description": "Defina planos focados para até {{max}} jogadores e associe jovens promessas a mentores experientes.",
+      "slotCount": "{{count}} / {{max}} planos",
+      "empty": "Nenhum plano de desenvolvimento individual ativo. Selecione um jogador abaixo para começar.",
+      "selectPlayer": "Selecionar jogador",
+      "mentorLabel": "Mentor experiente (opcional)",
+      "noMentor": "Sem mentor",
+      "mentorOption": "{{name}} ({{age}} anos)",
+      "mentorTag": "Orientado por {{mentor}}",
+      "menteeAgeHint": "A mentoria está disponível para jogadores jovens com 21 anos ou menos.",
+      "noEligibleMentors": "Nenhum jogador experiente atende aos requisitos para ser mentor no momento.",
+      "addPlan": "Adicionar plano",
+      "updatePlan": "Atualizar plano",
+      "editPlan": "Editar",
+      "clearPlan": "Remover",
+      "limitReached": "Todas as {{max}} vagas de plano estão em uso. Edite ou remova um plano ativo."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "Este jogador não pode sair: o clube ficaria com menos de {{floor}} jogadores no elenco profissional, o mínimo que um clube precisa manter."
       },
       "training": {
-        "individual_plan_limit": "Um clube pode ter no máximo 3 planos de desenvolvimento individuais ao mesmo tempo."
+        "individual_plan_limit": "Um clube pode ter no máximo 3 planos de desenvolvimento individuais ao mesmo tempo.",
+        "invalid_focus": "Foco de treino inválido.",
+        "invalid_intensity": "Intensidade de treino inválida.",
+        "mentor_same_player": "Um jogador não pode ser o próprio mentor.",
+        "mentor_not_in_club": "O mentor selecionado não pertence ao seu clube.",
+        "mentor_ineligible": "O mentor selecionado não atende aos requisitos de experiência e caráter para mentoria.",
+        "mentee_ineligible": "Apenas jogadores jovens com 21 anos ou menos podem receber um mentor."
       },
       "noActiveGameSession": "Nenhuma sessão de jogo ativa",
       "careerChanged": "A carreira mudou antes de isto poder ser salvo.",

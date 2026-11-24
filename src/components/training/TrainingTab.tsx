@@ -23,6 +23,7 @@ import { useFetchedSquad } from "../../hooks/useFetchedSquad";
 import { useTrainingFocusAttributes } from "../../hooks/useTrainingFocusAttributes";
 import { setTraining, setTrainingSchedule } from "../../services/trainingService";
 import { Card, CardBody, CardHeader, ProgressBar, TONE_TEXT } from "../ui";
+import IndividualPlansCard from "./IndividualPlansCard";
 import TrainingGroupsCard from "./TrainingGroupsCard";
 import TrainingSettingsPanel from "./TrainingSettingsPanel";
 import { getTrainingStaffAdvice } from "./trainingAdvice";
@@ -222,6 +223,23 @@ export default function TrainingTab({ gameState, onGameUpdate }: TrainingTabProp
           focusAttributes={focusAttributes}
           intensityIds={INTENSITY_IDS}
           intensityColors={INTENSITY_COLORS}
+        />
+
+        <IndividualPlansCard
+          team={team}
+          onGameUpdate={(game) => {
+            onGameUpdate?.(game);
+            if (teamId) {
+              setFetchedSquad(game.players.filter((p) => p.team_id === teamId));
+            }
+          }}
+          roster={roster}
+          allSquadPlayers={allSquadPlayers}
+          isSaving={isSaving}
+          setIsSaving={setIsSaving}
+          trainingFocusIds={TRAINING_FOCUS_IDS}
+          intensityIds={INTENSITY_IDS}
+          optionsRevision={sessionState ?? gameState}
         />
 
         <TrainingGroupsCard

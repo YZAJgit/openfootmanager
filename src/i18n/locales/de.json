@@ -1111,6 +1111,24 @@
         "3": "Jugend",
         "4": "Erholung"
       }
+    },
+    "individualPlans": {
+      "title": "Individuelle Entwicklungspläne",
+      "description": "Führe gezielte Pläne für bis zu {{max}} Spieler und weise jungen Talenten erfahrene Mentoren zu.",
+      "slotCount": "{{count}} / {{max}} Pläne",
+      "empty": "Keine individuellen Entwicklungspläne aktiv. Wähle unten einen Spieler aus.",
+      "selectPlayer": "Spieler auswählen",
+      "mentorLabel": "Erfahrener Mentor (optional)",
+      "noMentor": "Kein Mentor",
+      "mentorOption": "{{name}} ({{age}} J.)",
+      "mentorTag": "Betreut von {{mentor}}",
+      "menteeAgeHint": "Mentoring ist für junge Spieler bis einschließlich 21 Jahre verfügbar.",
+      "noEligibleMentors": "Derzeit erfüllt kein erfahrener Spieler die Mentor-Kriterien.",
+      "addPlan": "Plan hinzufügen",
+      "updatePlan": "Plan aktualisieren",
+      "editPlan": "Bearbeiten",
+      "clearPlan": "Entfernen",
+      "limitReached": "Alle {{max}} Planplätze sind belegt. Bearbeite oder entferne einen aktiven Plan."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "Dieser Spieler kann nicht gehen: Der Verein hätte dann weniger als {{floor}} Spieler im Profikader, das Minimum, das ein Verein halten muss."
       },
       "training": {
-        "individual_plan_limit": "Ein Verein kann höchstens 3 individuelle Entwicklungspläne gleichzeitig führen."
+        "individual_plan_limit": "Ein Verein kann höchstens 3 individuelle Entwicklungspläne gleichzeitig führen.",
+        "invalid_focus": "Ungültiger Trainingsschwerpunkt.",
+        "invalid_intensity": "Ungültige Trainingsintensität.",
+        "mentor_same_player": "Ein Spieler kann nicht sein eigener Mentor sein.",
+        "mentor_not_in_club": "Der ausgewählte Mentor gehört nicht zu deinem Verein.",
+        "mentor_ineligible": "Der ausgewählte Mentor erfüllt nicht die Alters- und Charakteranforderungen für das Mentoring.",
+        "mentee_ineligible": "Nur jungen Spielern bis einschließlich 21 Jahre kann ein Mentor zugewiesen werden."
       },
       "noActiveGameSession": "Keine aktive Spielsitzung",
       "careerChanged": "Die Karriere hat gewechselt, bevor dies gespeichert werden konnte.",

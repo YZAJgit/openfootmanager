@@ -1111,6 +1111,24 @@
         "3": "青年",
         "4": "恢复"
       }
+    },
+    "individualPlans": {
+      "title": "个人发展计划",
+      "description": "最多为 {{max}} 名球员制定专项培养计划，并为年轻新秀配对资深导师。",
+      "slotCount": "{{count}} / {{max}} 项计划",
+      "empty": "当前没有生效的个人发展计划。请在下方选择球员以创建。",
+      "selectPlayer": "选择球员",
+      "mentorLabel": "资深导师（可选）",
+      "noMentor": "无导师",
+      "mentorOption": "{{name}}（{{age}}岁）",
+      "mentorTag": "导师：{{mentor}}",
+      "menteeAgeHint": "仅 21 岁及以下的年轻球员可接受导师指导。",
+      "noEligibleMentors": "目前没有符合导师条件的资深球员。",
+      "addPlan": "添加计划",
+      "updatePlan": "更新计划",
+      "editPlan": "编辑",
+      "clearPlan": "移除",
+      "limitReached": "全部 {{max}} 个计划名额已满。请编辑或移除现有计划。"
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "该球员无法离队：俱乐部一线队将少于 {{floor}} 名球员，低于俱乐部必须保留的最低人数。"
       },
       "training": {
-        "individual_plan_limit": "一家俱乐部最多只能同时执行 3 个个人发展计划。"
+        "individual_plan_limit": "一家俱乐部最多只能同时执行 3 个个人发展计划。",
+        "invalid_focus": "无效的训练重点。",
+        "invalid_intensity": "无效的训练强度。",
+        "mentor_same_player": "球员不能担任自己的导师。",
+        "mentor_not_in_club": "所选导师不属于你的俱乐部。",
+        "mentor_ineligible": "所选导师不符合资深球员指导所需的年龄与性格要求。",
+        "mentee_ineligible": "只有 21 岁及以下的年轻球员才能指派导师。"
       },
       "noActiveGameSession": "当前没有活动中的游戏会话",
       "careerChanged": "在保存之前，生涯已经切换。",

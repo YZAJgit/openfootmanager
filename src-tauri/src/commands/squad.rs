@@ -6,6 +6,7 @@ use ofm_core::game::Game;
 use ofm_core::match_day_eligibility::validate_starting_xi;
 use ofm_core::state::{Career, StateManager};
 use ofm_core::training::SquadFitness;
+use ofm_core::training_feel::IndividualPlanOptions;
 
 use crate::commands::util::{mutate_active_game_for, user_team_id, user_team_mut};
 
@@ -392,6 +393,160 @@ pub fn set_training_groups_internal(
         team.training_groups =
             ofm_core::training_feel::merge_training_groups(&team.training_groups, groups);
 
+        Ok(())
+    })
+}
+
+fn parse_training_focus_strict(focus: &str) -> Result<domain::team::TrainingFocus, String> {
+    match focus {
+        "Physical" => Ok(domain::team::TrainingFocus::Physical),
+        "Technical" => Ok(domain::team::TrainingFocus::Technical),
+        "Tactical" => Ok(domain::team::TrainingFocus::Tactical),
+        "Defending" => Ok(domain::team::TrainingFocus::Defending),
+        "Attacking" => Ok(domain::team::TrainingFocus::Attacking),
+        "Recovery" => Ok(domain::team::TrainingFocus::Recovery),
+        _ => Err(ofm_core::training_feel::INVALID_FOCUS_ERROR.to_string()),
+    }
+}
+
+fn parse_training_intensity_strict(
+    intensity: &str,
+) -> Result<domain::team::TrainingIntensity, String> {
+    match intensity {
+        "Low" => Ok(domain::team::TrainingIntensity::Low),
+        "Medium" => Ok(domain::team::TrainingIntensity::Medium),
+        "High" => Ok(domain::team::TrainingIntensity::High),
+        _ => Err(ofm_core::training_feel::INVALID_INTENSITY_ERROR.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn get_individual_plan_options(
+    state: State<'_, Arc<StateManager>>,
+) -> Result<IndividualPlanOptions, String> {
+    get_individual_plan_options_internal(&state)
+}
+
+/// Eligible mentors, eligible mentees and plan cap for the user's club.
+pub fn get_individual_plan_options_internal(
+    state: &StateManager,
+) -> Result<IndividualPlanOptions, String> {
+    state
+        .get_game(|game| {
+            let team_id = user_team_id(game)?;
+            Ok(ofm_core::training_feel::individual_plan_options(
+                game, &team_id,
+            ))
+        })
+        .ok_or_else(|| "be.error.noActiveGameSession".to_string())?
+}
+
+#[tauri::command]
+pub fn set_individual_development_plan(
+    state: State<'_, Arc<StateManager>>,
+    player_id: String,
+    focus: String,
+    intensity: String,
+    mentor_id: Option<String>,
+    career_token: u64,
+) -> Result<Game, String> {
+    info!(
+        "[cmd] set_individual_development_plan: player={}, focus={}, intensity={}, mentor={:?}",
+        player_id, focus, intensity, mentor_id
+    );
+    set_individual_development_plan_internal(
+        &state,
+        Career::Token(career_token),
+        &player_id,
+        &focus,
+        &intensity,
+        mentor_id.as_deref(),
+    )
+}
+
+pub fn set_individual_development_plan_internal(
+    state: &StateManager,
+    career: Career,
+    player_id: &str,
+    focus: &str,
+    intensity: &str,
+    mentor_id: Option<&str>,
+) -> Result<Game, String> {
+    let training_focus = parse_training_focus_strict(focus)?;
+    let training_intensity = parse_training_intensity_strict(intensity)?;
+    let normalized_mentor = mentor_id.map(str::trim).filter(|id| !id.is_empty());
+
+    mutate_active_game_for(state, career, |game| {
+        let team_id = user_team_id(game)?;
+        let date = game.clock.current_date.date_naive();
+
+        let player = game
+            .players
+            .iter()
+            .find(|p| p.id == player_id)
+            .ok_or_else(|| "be.error.playerNotFound".to_string())?;
+        if player.retired || player.team_id.as_deref() != Some(team_id.as_str()) {
+            return Err("be.error.playerNotInClub".to_string());
+        }
+        let player_name = player.match_name.clone();
+        let mentee_age = domain::age::playing_age(date, &player.date_of_birth);
+
+        if let Some(mentor_id) = normalized_mentor {
+            if mentor_id == player_id {
+                return Err(ofm_core::training_feel::MENTOR_SAME_PLAYER_ERROR.to_string());
+            }
+            let mentor = game
+                .players
+                .iter()
+                .find(|p| {
+                    p.id == mentor_id
+                        && !p.retired
+                        && p.team_id.as_deref() == Some(team_id.as_str())
+                })
+                .ok_or_else(|| ofm_core::training_feel::MENTOR_NOT_IN_CLUB_ERROR.to_string())?;
+            let mentor_age = domain::age::playing_age(date, &mentor.date_of_birth);
+            let mentor_character = ofm_core::character::assessed_character(mentor, game.seed);
+            if !ofm_core::training_feel::can_mentor(mentor_age, mentee_age, &mentor_character) {
+                if mentee_age > ofm_core::training_feel::MENTEE_MAX_AGE {
+                    return Err(ofm_core::training_feel::MENTEE_INELIGIBLE_ERROR.to_string());
+                }
+                return Err(ofm_core::training_feel::MENTOR_INELIGIBLE_ERROR.to_string());
+            }
+        }
+
+        let team = user_team_mut(game)?;
+        ofm_core::training_feel::plan_individual_development(
+            team,
+            player_id,
+            &player_name,
+            training_focus,
+            training_intensity,
+            normalized_mentor.map(str::to_string),
+        )
+    })
+}
+
+#[tauri::command]
+pub fn clear_individual_development_plan(
+    state: State<'_, Arc<StateManager>>,
+    player_id: String,
+    career_token: u64,
+) -> Result<Game, String> {
+    info!(
+        "[cmd] clear_individual_development_plan: player={}",
+        player_id
+    );
+    clear_individual_development_plan_internal(&state, Career::Token(career_token), &player_id)
+}
+
+pub fn clear_individual_development_plan_internal(
+    state: &StateManager,
+    career: Career,
+    player_id: &str,
+) -> Result<Game, String> {
+    mutate_active_game_for(state, career, |game| {
+        let team = user_team_mut(game)?;
+        ofm_core::training_feel::clear_individual_plan(team, player_id);
         Ok(())
     })
 }
@@ -1834,5 +1989,326 @@ mod tests {
         assert_eq!(tiers[76], PlayerTier::B);
         assert_eq!(tiers[77], PlayerTier::A);
         assert_eq!(tiers[81], PlayerTier::S);
+    }
+
+    fn make_mentor_profile(
+        professionalism: u8,
+        ambition: u8,
+    ) -> domain::character::CharacterProfile {
+        domain::character::CharacterProfile {
+            professionalism,
+            ambition,
+            loyalty: 75,
+            consistency: 75,
+            big_matches: 70,
+            pressure_handling: 75,
+            injury_proneness: 30,
+            adaptability: 70,
+        }
+    }
+
+    fn state_for_individual_plans() -> StateManager {
+        let mut young_a = make_player_for_team("young-1", "team-1", "2007-05-01");
+        young_a.match_name = "A. Young".to_string();
+        let mut young_b = make_player_for_team("young-2", "team-1", "2006-05-01");
+        young_b.match_name = "B. Young".to_string();
+        let mut prime_c = make_player_for_team("prime-1", "team-1", "2000-05-01");
+        prime_c.match_name = "C. Prime".to_string();
+        let mut prime_d = make_player_for_team("prime-2", "team-1", "1999-05-01");
+        prime_d.match_name = "D. Prime".to_string();
+        let mut strong_senior = make_player_for_team("mentor-1", "team-1", "1992-01-01");
+        strong_senior.match_name = "M. Veteran".to_string();
+        strong_senior.character = make_mentor_profile(85, 80);
+        let mut weak_senior = make_player_for_team("weak-senior", "team-1", "1991-01-01");
+        weak_senior.match_name = "W. Senior".to_string();
+        weak_senior.character = make_mentor_profile(40, 80);
+        let mut rival_mentor = make_player_for_team("rival-mentor", "team-2", "1990-01-01");
+        rival_mentor.match_name = "R. Mentor".to_string();
+        rival_mentor.character = make_mentor_profile(90, 85);
+
+        let mut game = make_game(young_a);
+        game.teams.push(make_team("team-2", "Rivals FC", "RIV"));
+        game.players.extend([
+            young_b,
+            prime_c,
+            prime_d,
+            strong_senior,
+            weak_senior,
+            rival_mentor,
+        ]);
+        let state = StateManager::new();
+        state.set_game(game);
+        state
+    }
+
+    /// Given a club with a young player, a prime player and an eligible senior mentor
+    /// When plans are created with and without a mentor, updated in place, and cleared
+    /// Then the team's individual plans reflect each change while preserving squad groups.
+    #[test]
+    fn individual_development_plan_commands_create_update_and_clear() {
+        use super::{
+            clear_individual_development_plan_internal, set_individual_development_plan_internal,
+        };
+        use domain::team::{TrainingGroup, TrainingIntensity};
+
+        let state = state_for_individual_plans();
+        state
+            .update_game(|game| {
+                game.teams[0].training_groups.push(TrainingGroup {
+                    id: "squad-def".to_string(),
+                    name: "Defenders".to_string(),
+                    focus: TrainingFocus::Defending,
+                    player_ids: vec!["prime-1".to_string()],
+                    intensity: None,
+                    mentor_id: None,
+                });
+            })
+            .expect("seed squad group");
+
+        let updated = set_individual_development_plan_internal(
+            &state,
+            Career::Active,
+            "young-1",
+            "Technical",
+            "High",
+            Some("mentor-1"),
+        )
+        .expect("plan with mentor");
+        let plan = ofm_core::training_feel::individual_plan_for(&updated.teams[0], "young-1")
+            .expect("stored plan");
+        assert_eq!(plan.focus, &TrainingFocus::Technical);
+        assert_eq!(plan.intensity, &TrainingIntensity::High);
+        assert_eq!(plan.mentor_id, Some("mentor-1"));
+
+        let retuned = set_individual_development_plan_internal(
+            &state,
+            Career::Active,
+            "young-1",
+            "Tactical",
+            "Low",
+            None,
+        )
+        .expect("update plan without mentor");
+        let plan = ofm_core::training_feel::individual_plan_for(&retuned.teams[0], "young-1")
+            .expect("updated plan");
+        assert_eq!(plan.focus, &TrainingFocus::Tactical);
+        assert_eq!(plan.intensity, &TrainingIntensity::Low);
+        assert_eq!(plan.mentor_id, None);
+
+        let cleared = clear_individual_development_plan_internal(&state, Career::Active, "young-1")
+            .expect("clear plan");
+        assert!(
+            ofm_core::training_feel::individual_plan_for(&cleared.teams[0], "young-1").is_none()
+        );
+        assert!(cleared.teams[0]
+            .training_groups
+            .iter()
+            .any(|g| g.id == "squad-def"));
+    }
+
+    /// Given a club already running three individual development plans
+    /// When it requests a fourth plan
+    /// Then the command fails with `be.error.training.individual_plan_limit` and keeps three,
+    ///      while updating one of the three still succeeds.
+    #[test]
+    fn set_individual_development_plan_enforces_three_plan_limit() {
+        use super::set_individual_development_plan_internal;
+
+        let state = state_for_individual_plans();
+        for player_id in ["young-1", "young-2", "prime-1"] {
+            set_individual_development_plan_internal(
+                &state,
+                Career::Active,
+                player_id,
+                "Physical",
+                "Medium",
+                None,
+            )
+            .expect("within limit");
+        }
+
+        let err = set_individual_development_plan_internal(
+            &state,
+            Career::Active,
+            "prime-2",
+            "Attacking",
+            "High",
+            None,
+        )
+        .expect_err("fourth plan rejected");
+        assert_eq!(err, ofm_core::training_feel::INDIVIDUAL_PLAN_LIMIT_ERROR);
+        assert_eq!(
+            ofm_core::training_feel::individual_plans(&stored_team(&state)).len(),
+            ofm_core::training_feel::MAX_INDIVIDUAL_PLANS
+        );
+
+        // Updating an existing planned player does not trigger the cap.
+        set_individual_development_plan_internal(
+            &state,
+            Career::Active,
+            "prime-1",
+            "Defending",
+            "Low",
+            None,
+        )
+        .expect("retuning existing plan succeeds");
+    }
+
+    /// Given invalid mentor pairings or invalid player/enum inputs
+    /// When `set_individual_development_plan_internal` is called
+    /// Then each case returns its `be.error.*` translation key and leaves the club untouched.
+    #[test]
+    fn set_individual_development_plan_rejects_invalid_mentors_and_inputs() {
+        use super::set_individual_development_plan_internal;
+
+        let state = state_for_individual_plans();
+        let cases = [
+            (
+                "young-1",
+                "Technical",
+                "Medium",
+                Some("young-1"),
+                ofm_core::training_feel::MENTOR_SAME_PLAYER_ERROR,
+            ),
+            (
+                "young-1",
+                "Technical",
+                "Medium",
+                Some("rival-mentor"),
+                ofm_core::training_feel::MENTOR_NOT_IN_CLUB_ERROR,
+            ),
+            (
+                "young-1",
+                "Technical",
+                "Medium",
+                Some("weak-senior"),
+                ofm_core::training_feel::MENTOR_INELIGIBLE_ERROR,
+            ),
+            (
+                "young-1",
+                "Technical",
+                "Medium",
+                Some("prime-1"),
+                ofm_core::training_feel::MENTOR_INELIGIBLE_ERROR,
+            ),
+            (
+                "prime-1",
+                "Technical",
+                "Medium",
+                Some("mentor-1"),
+                ofm_core::training_feel::MENTEE_INELIGIBLE_ERROR,
+            ),
+            (
+                "rival-mentor",
+                "Technical",
+                "Medium",
+                None,
+                "be.error.playerNotInClub",
+            ),
+            (
+                "missing-player",
+                "Technical",
+                "Medium",
+                None,
+                "be.error.playerNotFound",
+            ),
+            (
+                "young-1",
+                "UnknownFocus",
+                "Medium",
+                None,
+                ofm_core::training_feel::INVALID_FOCUS_ERROR,
+            ),
+            (
+                "young-1",
+                "Technical",
+                "Extreme",
+                None,
+                ofm_core::training_feel::INVALID_INTENSITY_ERROR,
+            ),
+        ];
+
+        for (player_id, focus, intensity, mentor_id, expected_key) in cases {
+            let err = set_individual_development_plan_internal(
+                &state,
+                Career::Active,
+                player_id,
+                focus,
+                intensity,
+                mentor_id,
+            )
+            .expect_err("invalid input should be rejected");
+            assert_eq!(err, expected_key);
+        }
+        assert!(stored_team(&state).training_groups.is_empty());
+    }
+
+    /// Given a squad with eligible and ineligible mentors and mentees
+    /// When `get_individual_plan_options_internal` is called
+    /// Then it returns only the club's eligible mentors and mentees plus the backend plan cap,
+    ///      and reports missing sessions.
+    #[test]
+    fn get_individual_plan_options_projects_eligible_mentors_and_mentees() {
+        use super::get_individual_plan_options_internal;
+
+        assert_eq!(
+            get_individual_plan_options_internal(&StateManager::new()),
+            Err("be.error.noActiveGameSession".to_string())
+        );
+
+        let state = state_for_individual_plans();
+        let options = get_individual_plan_options_internal(&state).expect("options");
+
+        assert_eq!(
+            options.max_plans,
+            ofm_core::training_feel::MAX_INDIVIDUAL_PLANS
+        );
+        let mentor_ids: Vec<&str> = options
+            .eligible_mentors
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect();
+        let mentee_ids: Vec<&str> = options
+            .eligible_mentees
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect();
+        assert_eq!(mentor_ids, vec!["mentor-1"]);
+        assert_eq!(mentee_ids, vec!["young-1", "young-2"]);
+    }
+
+    /// Given career B is active (token 2) and a request carries career A's token (1)
+    /// When individual plan writes arrive with the stale token
+    /// Then they fail with `be.error.careerChanged` and leave career B untouched.
+    #[test]
+    fn individual_plan_writes_refuse_stale_career_token() {
+        use super::{
+            clear_individual_development_plan_internal, set_individual_development_plan_internal,
+        };
+
+        let state = state_for_individual_plans();
+        state
+            .update_game(|game| game.career_token = 2)
+            .expect("set token");
+
+        assert_eq!(
+            set_individual_development_plan_internal(
+                &state,
+                Career::Token(1),
+                "young-1",
+                "Technical",
+                "Medium",
+                None,
+            )
+            .err()
+            .as_deref(),
+            Some("be.error.careerChanged")
+        );
+        assert_eq!(
+            clear_individual_development_plan_internal(&state, Career::Token(1), "young-1")
+                .err()
+                .as_deref(),
+            Some("be.error.careerChanged")
+        );
     }
 }

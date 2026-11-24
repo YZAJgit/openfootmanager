@@ -201,6 +201,9 @@ describe("TrainingTab", () => {
       if (command === "get_squad") return defaultRoster;
       if (command === "get_training_focus_attributes") return [];
       if (command === "get_squad_fitness") return createSquadFitness();
+      if (command === "get_individual_plan_options") {
+        return { max_plans: 3, eligible_mentors: [], eligible_mentees: [] };
+      }
       return defaultState;
     });
   });

@@ -1111,6 +1111,24 @@
         "3": "Mládež",
         "4": "Regenerace"
       }
+    },
+    "individualPlans": {
+      "title": "Individuální rozvojové plány",
+      "description": "Nastavte cílené plány až pro {{max}} hráčů a spárujte mladé talenty se zkušenými mentory.",
+      "slotCount": "{{count}} / {{max}} plánů",
+      "empty": "Žádné aktivní individuální plány. Vyberte hráče níže a vytvořte plán.",
+      "selectPlayer": "Vyberte hráče",
+      "mentorLabel": "Zkušený mentor (volitelné)",
+      "noMentor": "Bez mentora",
+      "mentorOption": "{{name}} ({{age}} let)",
+      "mentorTag": "Mentoruje {{mentor}}",
+      "menteeAgeHint": "Mentorství je dostupné pro mladé hráče do 21 let.",
+      "noEligibleMentors": "Žádný zkušený hráč momentálně nesplňuje podmínky pro mentora.",
+      "addPlan": "Přidat plán",
+      "updatePlan": "Upravit plán",
+      "editPlan": "Upravit",
+      "clearPlan": "Odebrat",
+      "limitReached": "Všech {{max}} míst pro plány je obsazeno. Upravte nebo odeberte aktivní plán."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "Tento hráč nemůže odejít: klubu by v A-týmu zůstalo méně než {{floor}} hráčů, což je minimum, které musí klub udržet."
       },
       "training": {
-        "individual_plan_limit": "Klub může mít současně nejvýše 3 individuální rozvojové plány."
+        "individual_plan_limit": "Klub může mít současně nejvýše 3 individuální rozvojové plány.",
+        "invalid_focus": "Neplatné zaměření tréninku.",
+        "invalid_intensity": "Neplatná intenzita tréninku.",
+        "mentor_same_player": "Hráč nemůže být mentorem sám sobě.",
+        "mentor_not_in_club": "Vybraný mentor nepatří do vašeho klubu.",
+        "mentor_ineligible": "Vybraný mentor nesplňuje požadavky na věk a charakter pro mentorství.",
+        "mentee_ineligible": "Mentora lze přiřadit pouze mladým hráčům do 21 let."
       },
       "noActiveGameSession": "Žádná aktivní herní relace",
       "careerChanged": "Kariéra se změnila dříve, než to bylo možné uložit.",

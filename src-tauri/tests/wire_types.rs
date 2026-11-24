@@ -45,6 +45,8 @@ fn visit_wire_roots(visitor: &mut impl TypeVisitor) {
     visitor.visit::<ofm_core::slices::managers::ManagersStatus>();
     // `get_custom_tactic_differences` returns it; nothing in `Game` reaches it.
     visitor.visit::<ofm_core::custom_tactics::TacticDifferences>();
+    // `get_individual_plan_options` returns it; nothing in `Game` reaches it.
+    visitor.visit::<ofm_core::training_feel::IndividualPlanOptions>();
     visitor.visit::<engine::ShotMapEntry>();
     visitor.visit::<engine::PitchFrame2D>();
 }

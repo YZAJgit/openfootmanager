@@ -22,6 +22,7 @@ use domain::character::CharacterProfile;
 use domain::player::Player;
 use domain::team::{Team, TrainingFocus, TrainingGroup, TrainingIntensity};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::character::assessed_character;
 use crate::game::Game;
@@ -33,6 +34,18 @@ pub const MAX_INDIVIDUAL_PLANS: usize = 3;
 
 /// The translation key a club sees when it asks for a fourth plan.
 pub const INDIVIDUAL_PLAN_LIMIT_ERROR: &str = "be.error.training.individual_plan_limit";
+/// Translation key when a training focus string does not match a known [`TrainingFocus`].
+pub const INVALID_FOCUS_ERROR: &str = "be.error.training.invalid_focus";
+/// Translation key when a training intensity string does not match a known [`TrainingIntensity`].
+pub const INVALID_INTENSITY_ERROR: &str = "be.error.training.invalid_intensity";
+/// Translation key when a plan names the player himself as his own mentor.
+pub const MENTOR_SAME_PLAYER_ERROR: &str = "be.error.training.mentor_same_player";
+/// Translation key when the chosen mentor does not belong to the user's club.
+pub const MENTOR_NOT_IN_CLUB_ERROR: &str = "be.error.training.mentor_not_in_club";
+/// Translation key when the chosen mentor does not meet the age or character bar.
+pub const MENTOR_INELIGIBLE_ERROR: &str = "be.error.training.mentor_ineligible";
+/// Translation key when the target player is past the mentoring age ceiling.
+pub const MENTEE_INELIGIBLE_ERROR: &str = "be.error.training.mentee_ineligible";
 
 /// The id prefix that fans a plan's group out from the squad groups it shares a list with.
 const INDIVIDUAL_PLAN_ID_PREFIX: &str = "individual:";
@@ -189,6 +202,63 @@ pub fn mentor_is_strong(profile: &CharacterProfile) -> bool {
 /// Whether the two ages and the mentor's character make a mentoring pair.
 pub fn can_mentor(mentor_age: u32, mentee_age: u32, mentor: &CharacterProfile) -> bool {
     mentor_age >= MENTOR_MIN_AGE && mentee_age <= MENTEE_MAX_AGE && mentor_is_strong(mentor)
+}
+
+/// One club player who qualifies as a mentor or mentee under the club's mentoring rules.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct IndividualPlanCandidate {
+    pub id: String,
+    pub match_name: String,
+    pub age: u32,
+}
+
+/// Backend policy and eligible mentoring candidates for a club's individual development plans.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct IndividualPlanOptions {
+    pub max_plans: usize,
+    pub eligible_mentors: Vec<IndividualPlanCandidate>,
+    pub eligible_mentees: Vec<IndividualPlanCandidate>,
+}
+
+/// Eligible mentors, eligible mentees and plan cap for `team_id` on the game's current date.
+pub fn individual_plan_options(game: &Game, team_id: &str) -> IndividualPlanOptions {
+    let date = game.clock.current_date.date_naive();
+    let mut eligible_mentors = Vec::new();
+    let mut eligible_mentees = Vec::new();
+
+    for player in &game.players {
+        if player.retired || player.team_id.as_deref() != Some(team_id) {
+            continue;
+        }
+        let age = domain::age::playing_age(date, &player.date_of_birth);
+        let candidate = || IndividualPlanCandidate {
+            id: player.id.clone(),
+            match_name: player.match_name.clone(),
+            age,
+        };
+        if age >= MENTOR_MIN_AGE && mentor_is_strong(&assessed_character(player, game.seed)) {
+            eligible_mentors.push(candidate());
+        }
+        if age <= MENTEE_MAX_AGE {
+            eligible_mentees.push(candidate());
+        }
+    }
+
+    let sort_candidates = |list: &mut Vec<IndividualPlanCandidate>| {
+        list.sort_by(|left, right| {
+            left.match_name
+                .cmp(&right.match_name)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+    };
+    sort_candidates(&mut eligible_mentors);
+    sort_candidates(&mut eligible_mentees);
+
+    IndividualPlanOptions {
+        max_plans: MAX_INDIVIDUAL_PLANS,
+        eligible_mentors,
+        eligible_mentees,
+    }
 }
 
 /// One week of mentoring: each transferable trait of `mentee` moves at most one point toward
@@ -1047,5 +1117,45 @@ mod tests {
         assert_eq!(groups[0].intensity, None);
         assert_eq!(groups[0].mentor_id, None);
         assert!(!is_individual_plan(&groups[0]));
+    }
+
+    /// Given a squad with a strong senior, a weak senior, a prime-age player, a young mentee,
+    ///       a retired strong senior and a rival club's strong senior
+    /// When the club's individual plan options are projected
+    /// Then only the active strong senior is listed as a mentor, only the young player as a
+    ///      mentee, and the cap matches MAX_INDIVIDUAL_PLANS.
+    #[test]
+    fn individual_plan_options_filters_mentors_and_mentees_by_club_age_and_character() {
+        let mut strong = strong_mentor("mentor-1", "team1", "1992-01-01");
+        strong.match_name = "A. Veteran".to_string();
+        let mut weak = strong_mentor("weak-senior", "team1", "1990-01-01");
+        weak.character.professionalism = 55;
+        let prime = strong_mentor("prime", "team1", "2000-01-01");
+        let mut young = player("young-1", "team1", "2007-01-01");
+        young.match_name = "Y. Prospect".to_string();
+        let mut retired = strong_mentor("retired", "team1", "1988-01-01");
+        retired.retired = true;
+        let rival = strong_mentor("rival-mentor", "team2", "1990-01-01");
+
+        let game = game_with(vec![strong, weak, prime, young, retired, rival]);
+        let options = individual_plan_options(&game, "team1");
+
+        assert_eq!(options.max_plans, MAX_INDIVIDUAL_PLANS);
+        assert_eq!(
+            options.eligible_mentors,
+            vec![IndividualPlanCandidate {
+                id: "mentor-1".to_string(),
+                match_name: "A. Veteran".to_string(),
+                age: 34,
+            }]
+        );
+        assert_eq!(
+            options.eligible_mentees,
+            vec![IndividualPlanCandidate {
+                id: "young-1".to_string(),
+                match_name: "Y. Prospect".to_string(),
+                age: 19,
+            }]
+        );
     }
 }

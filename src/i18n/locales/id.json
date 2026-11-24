@@ -1111,6 +1111,24 @@
         "3": "Pemain Muda",
         "4": "Pemulihan"
       }
+    },
+    "individualPlans": {
+      "title": "Rencana Pengembangan Individu",
+      "description": "Jalankan rencana terarah hingga {{max}} pemain dan pasangkan talenta muda dengan mentor senior.",
+      "slotCount": "{{count}} / {{max}} rencana",
+      "empty": "Belum ada rencana pengembangan individu yang aktif. Pilih pemain di bawah untuk memulai.",
+      "selectPlayer": "Pilih pemain",
+      "mentorLabel": "Mentor senior (opsional)",
+      "noMentor": "Tanpa mentor",
+      "mentorOption": "{{name}} (Usia {{age}})",
+      "mentorTag": "Dibimbing oleh {{mentor}}",
+      "menteeAgeHint": "Bimbingan tersedia untuk pemain muda berusia 21 tahun ke bawah.",
+      "noEligibleMentors": "Belum ada pemain senior yang memenuhi syarat sebagai mentor.",
+      "addPlan": "Tambah Rencana",
+      "updatePlan": "Perbarui Rencana",
+      "editPlan": "Ubah",
+      "clearPlan": "Hapus",
+      "limitReached": "Semua {{max}} slot rencana telah terpakai. Ubah atau hapus rencana aktif terlebih dahulu."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "Pemain ini tidak bisa pergi: klub akan tinggal memiliki kurang dari {{floor}} pemain di tim utama, batas minimum yang harus dipertahankan klub."
       },
       "training": {
-        "individual_plan_limit": "Sebuah klub hanya dapat menjalankan paling banyak 3 rencana pengembangan individu sekaligus."
+        "individual_plan_limit": "Sebuah klub hanya dapat menjalankan paling banyak 3 rencana pengembangan individu sekaligus.",
+        "invalid_focus": "Fokus latihan tidak valid.",
+        "invalid_intensity": "Intensitas latihan tidak valid.",
+        "mentor_same_player": "Seorang pemain tidak dapat menjadi mentor bagi dirinya sendiri.",
+        "mentor_not_in_club": "Mentor yang dipilih bukan anggota klub Anda.",
+        "mentor_ineligible": "Mentor yang dipilih tidak memenuhi syarat usia senior dan karakter untuk membimbing.",
+        "mentee_ineligible": "Hanya pemain muda berusia 21 tahun ke bawah yang dapat diberi mentor."
       },
       "noActiveGameSession": "Tidak ada sesi permainan yang aktif",
       "careerChanged": "Karier berubah sebelum ini sempat disimpan.",

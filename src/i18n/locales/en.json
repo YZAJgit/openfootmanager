@@ -1111,6 +1111,24 @@
         "3": "Youth",
         "4": "Recovery"
       }
+    },
+    "individualPlans": {
+      "title": "Individual Development Plans",
+      "description": "Run focused plans for up to {{max}} players and pair young prospects with senior mentors.",
+      "slotCount": "{{count}} / {{max}} plans",
+      "empty": "No individual development plans active. Choose a player below to start one.",
+      "selectPlayer": "Select a player",
+      "mentorLabel": "Senior mentor (optional)",
+      "noMentor": "No mentor",
+      "mentorOption": "{{name}} (Age {{age}})",
+      "mentorTag": "Mentored by {{mentor}}",
+      "menteeAgeHint": "Mentoring is available for young players aged 21 or under.",
+      "noEligibleMentors": "No senior players currently qualify as mentors.",
+      "addPlan": "Add Plan",
+      "updatePlan": "Update Plan",
+      "editPlan": "Edit",
+      "clearPlan": "Remove",
+      "limitReached": "All {{max}} plan slots are in use. Edit or remove an active plan to change."
     }
   },
   "staff": {
@@ -2969,7 +2987,13 @@
         "wouldLeaveSeniorsShort": "This player cannot leave: the club would be left with fewer than {{floor}} senior players, the minimum a club must keep."
       },
       "training": {
-        "individual_plan_limit": "A club can run at most 3 individual development plans at once."
+        "individual_plan_limit": "A club can run at most 3 individual development plans at once.",
+        "invalid_focus": "Invalid training focus.",
+        "invalid_intensity": "Invalid training intensity.",
+        "mentor_same_player": "A player cannot be their own mentor.",
+        "mentor_not_in_club": "Selected mentor does not belong to your club.",
+        "mentor_ineligible": "Selected mentor does not meet the senior character requirements for mentoring.",
+        "mentee_ineligible": "Only young players aged 21 or under can be assigned a mentor."
       },
       "noActiveGameSession": "No active game session",
       "careerChanged": "The career changed before this could be saved.",

@@ -8,6 +8,9 @@ mod platform;
 mod report;
 pub use commands::slices::{PlayerCharacterView, TeamChemistryView};
 pub use commands::world_library::{WorldLibraryRow, WorldsLibrary};
+pub use commands::youth::{
+    HomeGrownSummaryView, ScholarStatusView, YouthAcademyOverview, YouthLoanMinutesStatusView,
+};
 use commands::*;
 
 #[cfg(feature = "mcp")]
@@ -266,6 +269,9 @@ pub fn run() {
             advance_time,
             advance_time_with_mode,
             upgrade_facility,
+            get_youth_academy_overview,
+            decide_scholarship_action,
+            recall_youth_loan_breach,
             get_finance_snapshot,
             request_board_support,
             request_marketing_campaign,

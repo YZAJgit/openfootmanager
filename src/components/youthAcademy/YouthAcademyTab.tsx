@@ -48,6 +48,7 @@ import { calculateAvailableScouts } from "../scouting/ScoutingTab.helpers";
 import ScoutingYouthRecruitmentCard from "../scouting/ScoutingYouthRecruitmentCard";
 import { naturalPositionOf } from "../../lib/positions";
 import PlayerPositionBadge from "../PlayerPositionBadge";
+import YouthAcademyOverviewPanel from "./YouthAcademyOverviewPanel";
 
 interface YouthAcademyTabProps {
   gameState: GameStateData | null;
@@ -78,6 +79,17 @@ export default function YouthAcademyTab({
   const teamId = sessionState?.manager?.team_id ?? gameState?.manager?.team_id ?? null;
   const clockDate = sessionState?.clock.current_date ?? gameState?.clock.current_date ?? "";
   const [fetchedSquad, setFetchedSquad] = useFetchedSquad(teamId, clockDate);
+  const playersRevisionRef = useRef({ players: gameState?.players, revision: 0 });
+  if (playersRevisionRef.current.players !== gameState?.players) {
+    playersRevisionRef.current = {
+      players: gameState?.players,
+      revision: playersRevisionRef.current.revision + 1,
+    };
+  }
+  const handleOverviewGameUpdate = (updated: GameStateData) => {
+    onGameUpdate?.(updated);
+    setFetchedSquad(updated.players.filter((p) => p.team_id === teamId));
+  };
 
   useEffect(() => {
     if (!teamId) return;
@@ -227,6 +239,13 @@ export default function YouthAcademyTab({
           {t("youthAcademy.playersUnder21", { count: youthPlayers.length })}
         </Badge>
       </div>
+
+      {teamId && (
+        <YouthAcademyOverviewPanel
+          refreshKey={`${teamId ?? ""}|${clockDate}|${gameState?.career_token ?? ""}|${playersRevisionRef.current.revision}`}
+          onGameUpdate={handleOverviewGameUpdate}
+        />
+      )}
 
       {/* Overview Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

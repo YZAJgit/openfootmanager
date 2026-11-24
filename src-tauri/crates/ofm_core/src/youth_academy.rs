@@ -502,6 +502,14 @@ pub fn home_grown_shortfall(
     quota: HomeGrownQuota,
     on: NaiveDate,
 ) -> HomeGrownShortfall {
+    let counts = home_grown_counts(squad, club, on);
+    HomeGrownShortfall {
+        club_trained: quota.club_trained.saturating_sub(counts.club_trained),
+        nation_trained: quota.nation_trained.saturating_sub(counts.nation_trained),
+    }
+}
+
+pub fn home_grown_counts(squad: &[Player], club: &Team, on: NaiveDate) -> HomeGrownQuota {
     let club_trained = squad
         .iter()
         .filter(|player| is_home_grown(player, on, |spell| spell.club_id == club.id))
@@ -514,9 +522,9 @@ pub fn home_grown_shortfall(
             })
         })
         .count();
-    HomeGrownShortfall {
-        club_trained: quota.club_trained.saturating_sub(club_trained),
-        nation_trained: quota.nation_trained.saturating_sub(nation_trained),
+    HomeGrownQuota {
+        club_trained,
+        nation_trained,
     }
 }
 
@@ -640,7 +648,7 @@ pub fn monitor_guaranteed_youth_loan_minutes(game: &mut Game) -> Vec<LoanMinutes
 /// Minutes the loan club has played since the loan began, or `None` while too few fixtures are
 /// complete to judge. Fixtures dated on the start day are skipped: matches are simulated before
 /// the day's loan registrations, so such a fixture was played before the loan existed.
-fn available_loan_minutes(game: &Game, player: &Player) -> Option<u32> {
+pub fn available_loan_minutes(game: &Game, player: &Player) -> Option<u32> {
     let loan = player.active_loan.as_ref()?;
     let today = crate::contracts::iso(game.clock.current_date.date_naive());
     let matches = game
@@ -893,8 +901,16 @@ mod tests {
             ended_on: Some("2021-01-01".to_string()),
         });
 
+        let squad = [trained, short];
+        assert_eq!(
+            home_grown_counts(&squad, &club("user"), day(2022, 1, 1)),
+            HomeGrownQuota {
+                club_trained: 1,
+                nation_trained: 1
+            }
+        );
         let shortfall = home_grown_shortfall(
-            &[trained, short],
+            &squad,
             &club("user"),
             HomeGrownQuota {
                 club_trained: 1,

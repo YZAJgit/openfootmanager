@@ -4,6 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { GameStateData, PlayerData, StaffData, TeamData } from "../../store/gameStore";
 import YouthAcademyTab from "./YouthAcademyTab";
+import * as youthService from "../../services/youthAcademyService";
+
+vi.mock("../../services/youthAcademyService", () => ({
+  getYouthAcademyOverview: vi.fn().mockResolvedValue(null),
+  decideScholarshipAction: vi.fn(),
+  recallYouthLoanBreach: vi.fn(),
+}));
 import { createSeasonContext } from "../../test-utils/factories";
 import { i18nReady } from "../../i18n";
 
@@ -255,6 +262,45 @@ function makeEmptyStaffSlice() {
 describe("YouthAcademyTab", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
+  });
+
+  it("updates the roster after an overview scholarship action", async () => {
+    const player = createPlayer({ id: "scholar", full_name: "Scholar", squad_role: "Youth" });
+    const game = createGameState([player]);
+    const updated = createGameState([{ ...player, squad_role: "Senior" }]);
+    vi.mocked(youthService.getYouthAcademyOverview).mockResolvedValue({
+      academy_tier: "CategoryOne",
+      home_grown: {
+        club_trained_count: 0,
+        club_trained_quota: 4,
+        club_trained_shortfall: 4,
+        nation_trained_count: 0,
+        nation_trained_quota: 8,
+        nation_trained_shortfall: 8,
+      },
+      scholars: [
+        {
+          player_id: "scholar",
+          full_name: "Scholar",
+          age: 18,
+          joined_on: null,
+          scholarship_deadline: "2026-08-10",
+          decision_due: true,
+        },
+      ],
+      loaned_youth: [],
+    });
+    vi.mocked(youthService.decideScholarshipAction).mockResolvedValue(updated);
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_squad") return game.players;
+      if (command === "get_staff") return makeEmptyStaffSlice();
+      return game;
+    });
+    render(<YouthAcademyTab gameState={game} onGameUpdate={vi.fn()} />);
+    fireEvent.click(await screen.findByText("youthAcademy.offerPro"));
+    await waitFor(() => expect(screen.getByText("No youth players")).toBeInTheDocument());
+    expect(screen.getByText("1 eligible senior players")).toBeInTheDocument();
+    vi.mocked(youthService.getYouthAcademyOverview).mockResolvedValue(null);
   });
 
   it("renders the empty state when the squad has no youth players", async () => {

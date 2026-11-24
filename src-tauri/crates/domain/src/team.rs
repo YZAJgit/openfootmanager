@@ -466,7 +466,7 @@ pub enum FacilityType {
     Scouting,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum AcademyTier {
     CategoryOne,
     CategoryTwo,

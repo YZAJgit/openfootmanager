@@ -1,5 +1,6 @@
 import type { SupportedLanguageCode } from "../../i18n";
 import type { TeamChemistryView } from "../../store/generated/TeamChemistryView";
+import type { YouthAcademyOverview } from "../../store/generated/YouthAcademyOverview";
 import type { SettingsResponse } from "../../store/settingsStore";
 import type { StyleGuideOptions } from "../styleGuide/styleGuideOptions";
 import * as fixture from "./fixture.generated";
@@ -139,6 +140,19 @@ export function fixtureHandlers(
     get_active_game: () => (patch ? withPlayerPatch(fixture.gameState, patch) : fixture.gameState),
     get_active_save_id: () => "page-harness",
     get_career_stage: () => fixture.careerStage,
+    get_youth_academy_overview: (): YouthAcademyOverview => ({
+      academy_tier: "CategoryFour",
+      scholars: [],
+      home_grown: {
+        club_trained_count: 0,
+        nation_trained_count: 0,
+        club_trained_quota: 0,
+        nation_trained_quota: 0,
+        club_trained_shortfall: 0,
+        nation_trained_shortfall: 0,
+      },
+      loaned_youth: [],
+    }),
     // No team id means the manager's club, as in the Rust command.
     get_finance_snapshot: ({ teamId }) =>
       forUserClub(teamId ?? USER_CLUB, () => ({

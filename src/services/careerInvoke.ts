@@ -48,6 +48,8 @@ export const SCREEN_WRITE_COMMANDS = [
   "counter_offer",
   "send_scout",
   "start_youth_scouting",
+  "decide_scholarship_action",
+  "recall_youth_loan_breach",
   "cancel_youth_scouting",
   "reassign_youth_scouting",
   "propose_renewal",

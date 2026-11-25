@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Transfer Taksitleri",
+        "outstandingOwed": "Ödenecek bakiye",
+        "outstandingReceivable": "Alacak bakiyesi",
+        "payable": "Ödeme",
+        "receivable": "Alacak",
+        "upcoming": "Vadesi gelmedi",
+        "settled": "Ödendi",
+        "dueDate": "Vade: {{date}}",
+        "empty": "Planlanmış transfer taksiti bulunmuyor."
+      },
     "overview": "Finansal Genel Bakış",
     "wageBill": "Maaş Yükü",
     "weeklyTotal": "Haftalık Toplam",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Serbest kalma bedeli",
+      "triggerReleaseClause": "Serbest kalma bedelini öde",
+      "paymentStructure": "Ödeme planı",
+      "outrightPayment": "Peşin",
+      "installmentsPayment": "Taksitli",
+      "installmentsWindowClosed": "Taksitli teklifler yalnızca transfer dönemi açıkken yapılabilir.",
+      "upfrontFee": "Peşinat",
+      "trancheCount": "Taksit sayısı (1–6)",
+      "intervalDays": "Ödeme aralığı (gün)",
+      "deferredBalance": "Kalan taksit tutarı",
+      "competingBids": "Rakip teklifler",
+      "recallLoan": "Kiralıktan geri çağır",
+      "recallingLoan": "Geri çağrılıyor...",
     "offerHistory": "Teklif geçmişi",
     "viewOfferHistory": "Teklif geçmişini görüntüle",
     "offerRecordedOn": "Teklif tarihi: {{date}}.",
@@ -3263,6 +3287,12 @@
         "historyDepthMax": "Üretilen tarihçe derinliği 24 sezon veya daha az olmalıdır."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Taksit sayısı 1 ile 6 arasında olmalıdır.",
+          "trancheInterval": "Taksit aralığı 30 ile 365 gün arasında olmalıdır.",
+          "nothingDeferred": "Peşinat tutarı toplam bonservis bedelinden düşük olmalıdır.",
+          "feeTooLarge": "Bonservis bedeli desteklenen üst sınırı aşıyor."
+        },
         "transferWindowClosed": "Transfer dönemi kapalı",
         "cannotBidOnOwnPlayer": "Kendi oyuncunuza teklif veremezsiniz",
         "playerHasNoTeam": "Oyuncunun takımı yok",

@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Parcelas de transferências",
+        "outstandingOwed": "Saldo a pagar",
+        "outstandingReceivable": "Saldo a receber",
+        "payable": "A pagar",
+        "receivable": "A receber",
+        "upcoming": "A vencer",
+        "settled": "Quitado",
+        "dueDate": "Vencimento: {{date}}",
+        "empty": "Nenhuma parcela de transferência programada."
+      },
     "overview": "Visão Financeira",
     "wageBill": "Folha Salarial",
     "weeklyTotal": "Total Semanal",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Multa rescisória",
+      "triggerReleaseClause": "Acionar multa rescisória",
+      "paymentStructure": "Forma de pagamento",
+      "outrightPayment": "À vista",
+      "installmentsPayment": "Parcelado",
+      "installmentsWindowClosed": "Ofertas parceladas só estão disponíveis durante a janela de transferências.",
+      "upfrontFee": "Entrada",
+      "trancheCount": "Parcelas (1–6)",
+      "intervalDays": "Intervalo (dias)",
+      "deferredBalance": "Saldo parcelado",
+      "competingBids": "Propostas concorrentes",
+      "recallLoan": "Encerrar empréstimo",
+      "recallingLoan": "Encerrando empréstimo...",
     "offerHistory": "Histórico de ofertas",
     "viewOfferHistory": "Ver histórico de ofertas",
     "offerRecordedOn": "Oferta feita em {{date}}.",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "A profundidade do histórico gerado deve ser de 24 temporadas ou menos."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "O número de parcelas deve estar entre 1 e 6.",
+          "trancheInterval": "O intervalo entre parcelas deve ser de 30 a 365 dias.",
+          "nothingDeferred": "O pagamento inicial deve ser menor que o valor total da transferência.",
+          "feeTooLarge": "O valor da transferência excede o limite máximo permitido."
+        },
         "transferWindowClosed": "A janela de transferências está fechada",
         "cannotBidOnOwnPlayer": "Você não pode fazer proposta por seu próprio jogador",
         "playerHasNoTeam": "O jogador não tem time",

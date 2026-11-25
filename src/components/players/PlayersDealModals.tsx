@@ -21,6 +21,7 @@ export default function PlayersDealModals({
   const { t } = useTranslation();
   const {
     bidTarget,
+    installments,
     bidAmount,
     setBidAmount,
     bidResult,
@@ -35,6 +36,7 @@ export default function PlayersDealModals({
     bidSubmitDisabled,
     closeBidNegotiation,
     handleMakeBid,
+    bidError,
   } = bidFlow;
   const {
     freeAgentTarget,
@@ -58,6 +60,7 @@ export default function PlayersDealModals({
           bidTarget={bidTarget}
           teams={teams}
           bidAmount={bidAmount}
+          installments={installments}
           onBidAmountChange={setBidAmount}
           myTeam={myTeam}
           bidFee={bidFee}
@@ -69,6 +72,7 @@ export default function PlayersDealModals({
           bidResult={bidResult}
           bidLoading={bidLoading}
           bidSubmitDisabled={bidSubmitDisabled}
+          bidError={bidError}
           onSubmit={handleMakeBid}
           onClose={closeBidNegotiation}
         />

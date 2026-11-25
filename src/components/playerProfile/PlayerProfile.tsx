@@ -131,6 +131,8 @@ export default function PlayerProfile({
 
       {player.active_loan ? (
         <PlayerProfileLoanStatusBanner
+          playerId={player.id}
+          onGameUpdate={onGameUpdate}
           loan={player.active_loan}
           teams={gameState.teams}
           managerTeamId={managerTeamId}

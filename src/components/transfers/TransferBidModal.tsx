@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { getPlayerTransferTerms } from "../../services/transfersService";
+import type { PlayerTransferTermsView } from "../../store/generated/PlayerTransferTermsView";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 
@@ -17,6 +20,7 @@ import { playerHasPendingRegistration } from "./TransfersTab.model";
 import PlayerPositionBadge from "../PlayerPositionBadge";
 
 export interface TransferBidFormProps {
+  installments?: import("./useTransferBidFlow").UseTransferBidFlowResult["installments"];
   bidTarget: PlayerData;
   teams: TeamData[];
   bidAmount: string;
@@ -41,9 +45,13 @@ export interface TransferBidFormProps {
   onClose: () => void;
 }
 
+const sanitizeInstallment = (value: number, max: number): number =>
+  Number.isFinite(value) ? Math.min(max, Math.max(0, Math.trunc(value))) : 0;
+
 type TransferBidModalProps = TransferBidFormProps;
 
 export function TransferBidForm({
+  installments,
   bidTarget,
   teams,
   bidAmount,
@@ -66,6 +74,24 @@ export function TransferBidForm({
   onClose,
 }: TransferBidFormProps) {
   const { t, i18n } = useTranslation();
+  const [terms, setTerms] = useState<PlayerTransferTermsView | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setTerms(null);
+    getPlayerTransferTerms(bidTarget.id)
+      .then((value) => {
+        if (!cancelled) setTerms(value);
+      })
+      .catch(() => {
+        if (!cancelled) setTerms(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bidTarget.id]);
+  useEffect(() => {
+    if (!terms?.structured_bid_allowed && installments?.enabled) installments.setEnabled(false);
+  }, [terms, installments]);
   const titleId = `transfer-bid-modal-title-${bidTarget.id}`;
   // A player with an agreed deal awaiting registration is off the market — the
   // engine refuses a new bid. Surface it here so reaching this form from a
@@ -95,6 +121,34 @@ export function TransferBidForm({
               })}
             </p>
           </div>
+        </div>
+      ) : null}
+      {terms?.release_clause != null ? (
+        <div className="mb-3 text-xs">
+          <span>
+            {t("transfers.releaseClause")} {formatExactMoney(terms.release_clause)}
+          </span>{" "}
+          <button
+            type="button"
+            onClick={() => {
+              onBidAmountChange(String(terms.release_clause! / 1_000_000));
+              installments?.setEnabled(false);
+            }}
+          >
+            {t("transfers.triggerReleaseClause")}
+          </button>
+        </div>
+      ) : null}
+      {terms?.competing_bids.length ? (
+        <div className="mb-3 text-xs">
+          <p>{t("transfers.competingBids")}</p>
+          <ul>
+            {terms.competing_bids.map((bid, index) => (
+              <li key={`${bid.from_team_name}-${index}`}>
+                {bid.from_team_name}: {formatExactMoney(bid.fee)}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
       {blockingTitle ? (
@@ -144,6 +198,78 @@ export function TransferBidForm({
             onChange={(event) => onBidAmountChange(event.target.value)}
             className="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 text-sm text-gray-800 dark:text-gray-200 mb-3 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           />
+          {installments ? (
+            <fieldset className="mb-3 text-sm space-y-2">
+              <legend>{t("transfers.paymentStructure")}</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="payment-structure"
+                  checked={!installments.enabled}
+                  onChange={() => installments.setEnabled(false)}
+                />{" "}
+                {t("transfers.outrightPayment")}
+              </label>{" "}
+              <label>
+                <input
+                  type="radio"
+                  name="payment-structure"
+                  checked={installments.enabled}
+                  disabled={!terms?.structured_bid_allowed}
+                  onChange={() => installments.setEnabled(true)}
+                />{" "}
+                {t("transfers.installmentsPayment")}
+              </label>
+              {terms != null && !terms.structured_bid_allowed ? (
+                <p>{t("transfers.installmentsWindowClosed")}</p>
+              ) : null}
+              {installments.enabled ? (
+                <div className="space-y-2">
+                  <label className="block">
+                    {t("transfers.upfrontFee")}{" "}
+                    <input
+                      type="number"
+                      min="0"
+                      value={installments.upfront}
+                      onChange={(e) =>
+                        installments.setUpfront(
+                          sanitizeInstallment(Number(e.target.value), Number.MAX_SAFE_INTEGER),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    {t("transfers.trancheCount")}{" "}
+                    <input
+                      type="number"
+                      min="1"
+                      max="6"
+                      value={installments.count}
+                      onChange={(e) =>
+                        installments.setCount(sanitizeInstallment(Number(e.target.value), 255))
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    {t("transfers.intervalDays")}{" "}
+                    <input
+                      type="number"
+                      min="30"
+                      max="365"
+                      value={installments.interval}
+                      onChange={(e) =>
+                        installments.setInterval(sanitizeInstallment(Number(e.target.value), 65535))
+                      }
+                    />
+                  </label>
+                  <p>
+                    {t("transfers.deferredBalance")}:{" "}
+                    {formatExactMoney(Math.max(0, (bidFee ?? 0) - installments.upfront))}
+                  </p>
+                </div>
+              ) : null}
+            </fieldset>
+          ) : null}
           {myTeam && bidFee !== null && bidProjection ? (
             <div className="rounded-lg border border-gray-200 dark:border-navy-700 bg-white/70 dark:bg-navy-900/40 p-3 mb-3 space-y-2">
               <p className="text-[11px] font-heading font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">

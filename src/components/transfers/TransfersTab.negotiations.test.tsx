@@ -59,6 +59,7 @@ describe("TransfersTab", (): void => {
     listedPlayers = [];
     offeredPlayers = [];
     mockedInvoke.mockImplementation(async (command: string, payload?: InvokeArgs) => {
+      if (command === "get_player_transfer_terms") return null;
       const args = payload as MockInvokePayload | undefined;
       if (command === "get_players_page") {
         return marketPageOf(
@@ -241,6 +242,7 @@ describe("TransfersTab", (): void => {
     ]);
 
     mockedInvoke.mockImplementation(async (command: string, payload?: InvokeArgs) => {
+      if (command === "get_player_transfer_terms") return null;
       const args = payload as MockInvokePayload | undefined;
       if (command === "get_players_page") {
         return marketPageOf(
@@ -533,6 +535,7 @@ describe("TransfersTab", (): void => {
     ];
 
     mockedInvoke.mockImplementation(async (command: string, payload?: InvokeArgs) => {
+      if (command === "get_player_transfer_terms") return null;
       const args = payload as MockInvokePayload | undefined;
       if (command === "get_players_page") {
         return marketPageOf(

@@ -395,7 +395,9 @@ pub fn project_transfer_bid_financial_impact(
     let transfer_budget_before = available_transfer_budget(game, team);
     let transfer_budget_after =
         transfer_budget_before.saturating_sub(i64::try_from(fee).unwrap_or(i64::MAX));
-    let finance_after = team.finance - fee as i64;
+    let finance_after = team
+        .finance
+        .saturating_sub(i64::try_from(fee).unwrap_or(i64::MAX));
 
     // Same rule as make_transfer_bid uses when it decides Accepted vs
     // PendingRegistration: a registration date later than today means the

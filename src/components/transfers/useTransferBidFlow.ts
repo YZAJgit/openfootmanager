@@ -5,6 +5,7 @@ import {
   type BidNegotiationStatusData,
   getBidNegotiationStatus,
   makeTransferBid,
+  makeStructuredTransferBid,
   previewTransferBidFinancialImpact,
   type TransferBidProjectionData,
   type TransferNegotiationFeedbackData,
@@ -21,7 +22,17 @@ interface UseTransferBidFlowArgs {
   onGameUpdate?: (game: GameStateData) => void;
 }
 
-interface UseTransferBidFlowResult {
+export interface UseTransferBidFlowResult {
+  installments: {
+    enabled: boolean;
+    upfront: number;
+    count: number;
+    interval: number;
+    setEnabled: (v: boolean) => void;
+    setUpfront: (v: number) => void;
+    setCount: (v: number) => void;
+    setInterval: (v: number) => void;
+  };
   bidTarget: PlayerData | null;
   bidAmount: string;
   setBidAmount: (value: string) => void;
@@ -56,6 +67,10 @@ export function useTransferBidFlow({
       ? null
       : (gameState.players.find((player) => player.id === bidTargetId) ?? null);
   const [bidAmount, setBidAmount] = useState("");
+  const [enabled, setEnabledState] = useState(false);
+  const [upfront, setUpfront] = useState(0);
+  const [count, setCount] = useState(2);
+  const [interval, setInterval] = useState(90);
   const [bidResult, setBidResult] = useState<
     TransferNegotiationResponseData["decision"] | "error" | null
   >(null);
@@ -117,6 +132,15 @@ export function useTransferBidFlow({
     ? Math.round(bidAmountMillions * 1_000_000)
     : null;
 
+  const setEnabled = (value: boolean): void => {
+    setEnabledState(value);
+    if (value) {
+      setUpfront(Math.floor((bidFee ?? 0) / 2));
+      setCount(2);
+      setInterval(90);
+    }
+  };
+
   useEffect(() => {
     if (!bidTarget || bidFee === null || bidFee <= 0) {
       setBidProjection(null);
@@ -127,7 +151,9 @@ export function useTransferBidFlow({
 
     const loadProjection = async (): Promise<void> => {
       try {
-        const result = await previewTransferBidFinancialImpact(bidTarget.id, bidFee);
+        const result = await (enabled
+          ? previewTransferBidFinancialImpact(bidTarget.id, bidFee, upfront)
+          : previewTransferBidFinancialImpact(bidTarget.id, bidFee));
 
         if (!cancelled) {
           setBidProjection(result.projection ?? null);
@@ -144,9 +170,23 @@ export function useTransferBidFlow({
     return () => {
       cancelled = true;
     };
-  }, [bidFee, bidTarget]);
+  }, [bidFee, bidTarget, enabled, upfront]);
+
+  const bidSessionRef = useRef(0);
+  useEffect(
+    () => () => {
+      bidSessionRef.current += 1;
+    },
+    [],
+  );
 
   const openBidNegotiation = (player: PlayerData): void => {
+    bidSessionRef.current += 1;
+    setBidLoading(false);
+    setEnabledState(false);
+    setUpfront(0);
+    setCount(2);
+    setInterval(90);
     resumedFor.current = null;
     setOpenings((count) => count + 1);
     setBidTargetId(player.id);
@@ -159,6 +199,12 @@ export function useTransferBidFlow({
   };
 
   const closeBidNegotiation = (): void => {
+    bidSessionRef.current += 1;
+    setBidLoading(false);
+    setEnabledState(false);
+    setUpfront(0);
+    setCount(2);
+    setInterval(90);
     resumedFor.current = null;
     setBidTargetId(null);
     setBidAmount("");
@@ -173,13 +219,17 @@ export function useTransferBidFlow({
       return;
     }
 
+    const session = bidSessionRef.current;
     setBidLoading(true);
     setBidResult(null);
     setBidError(null);
     setBidFeedback(null);
 
     try {
-      const response = await makeTransferBid(bidTarget.id, bidFee);
+      const response = await (enabled
+        ? makeStructuredTransferBid(bidTarget.id, bidFee, upfront, count, interval)
+        : makeTransferBid(bidTarget.id, bidFee));
+      if (bidSessionRef.current !== session) return;
       // The player is handled now: an offer the game update brings is this bid's own, and its
       // feedback is the response's, not a "resumed negotiation" one.
       resumedFor.current = bidTarget.id;
@@ -195,15 +245,26 @@ export function useTransferBidFlow({
         setBidAmount((response.suggested_fee / 1_000_000).toFixed(2));
       }
     } catch (error: unknown) {
+      if (bidSessionRef.current !== session) return;
       setBidResult("error");
       setBidError(resolveTranslatedErrorMessage(getErrorMessage(error)));
       setBidFeedback(null);
     } finally {
-      setBidLoading(false);
+      if (bidSessionRef.current === session) setBidLoading(false);
     }
   };
 
   return {
+    installments: {
+      enabled,
+      upfront,
+      count,
+      interval,
+      setEnabled,
+      setUpfront,
+      setCount,
+      setInterval,
+    },
     bidTarget,
     bidAmount,
     setBidAmount,

@@ -1,10 +1,16 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+﻿import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PlayerData, TeamData, TransferOfferData } from "../../store/gameStore";
+import { getPlayerTransferTerms } from "../../services/transfersService";
 import type { TransferBidProjectionData } from "../../services/transfersService";
 import { formatExactMoney } from "../../lib/helpers";
 import TransferBidModal from "./TransferBidModal";
+
+vi.mock("../../services/transfersService", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/transfersService")>()),
+  getPlayerTransferTerms: vi.fn().mockResolvedValue(null),
+}));
 
 // The language the mocked translation reports; a test sets it to read a date in another one.
 const testLanguage = vi.hoisted(() => ({ current: "en" }));
@@ -213,6 +219,70 @@ function createProjection(
 }
 
 describe("TransferBidModal", () => {
+  it.each([true, false])(
+    "shows transfer terms and handles window availability: %s",
+    async (allowed) => {
+      vi.mocked(getPlayerTransferTerms).mockResolvedValueOnce({
+        loan_recallable: false,
+        release_clause: 2500000,
+        competing_bids: [
+          {
+            offer_id: "offer",
+            from_team_id: "rival",
+            from_team_name: "Rival FC",
+            fee: 1800000,
+            status: "Pending",
+          },
+        ],
+        structured_bid_allowed: allowed,
+      });
+      const change = vi.fn();
+      const setEnabled = vi.fn();
+      render(
+        <TransferBidModal
+          bidTarget={createPlayer()}
+          teams={[createTeam()]}
+          bidAmount="1.5"
+          onBidAmountChange={change}
+          myTeam={createTeam()}
+          bidFee={1500000}
+          bidProjection={createProjection()}
+          bidFeedback={null}
+          activeBidOffer={null}
+          hasExistingOffer={false}
+          bidResult={null}
+          bidLoading={false}
+          bidSubmitDisabled={false}
+          onSubmit={vi.fn()}
+          onClose={vi.fn()}
+          installments={{
+            enabled: false,
+            upfront: 0,
+            count: 2,
+            interval: 90,
+            setEnabled,
+            setUpfront: vi.fn(),
+            setCount: vi.fn(),
+            setInterval: vi.fn(),
+          }}
+        />,
+      );
+      expect(await screen.findByText(/Rival FC/)).toHaveTextContent(formatExactMoney(1800000));
+      expect(
+        screen.getByText(
+          new RegExp(formatExactMoney(2500000).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+        ),
+      ).toBeInTheDocument();
+      const radio = screen.getByLabelText("transfers.installmentsPayment");
+      expect(radio).toHaveProperty("disabled", !allowed);
+      if (!allowed)
+        expect(screen.getByText("transfers.installmentsWindowClosed")).toBeInTheDocument();
+      fireEvent.click(screen.getByText("transfers.triggerReleaseClause"));
+      expect(change).toHaveBeenCalledWith("2.5");
+      expect(setEnabled).toHaveBeenCalledWith(false);
+    },
+  );
+
   // Regression: `bidResult` is a *decision* the UI switches on, and the reason a bid failed used
   // to be stuffed into the same variable — which only type-checked because the hook's catch was
   // `any`. Typing the catch properly made the screen show the literal word "error" instead of

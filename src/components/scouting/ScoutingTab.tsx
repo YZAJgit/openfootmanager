@@ -85,6 +85,7 @@ export default function ScoutingTab({
   }, [gameState, refetchScoutable]);
   const {
     bidTarget,
+    installments,
     bidAmount,
     setBidAmount,
     bidResult,
@@ -100,6 +101,7 @@ export default function ScoutingTab({
     openBidNegotiation,
     closeBidNegotiation,
     handleMakeBid,
+    bidError,
   } = useTransferBidFlow({
     gameState,
     onGameUpdate,
@@ -331,6 +333,7 @@ export default function ScoutingTab({
           bidTarget={bidTarget}
           teams={gameState.teams}
           bidAmount={bidAmount}
+          installments={installments}
           onBidAmountChange={setBidAmount}
           myTeam={myTeam}
           bidFee={bidFee}
@@ -342,6 +345,7 @@ export default function ScoutingTab({
           bidResult={bidResult}
           bidLoading={bidLoading}
           bidSubmitDisabled={bidSubmitDisabled}
+          bidError={bidError}
           onSubmit={handleMakeBid}
           onClose={closeBidNegotiation}
         />

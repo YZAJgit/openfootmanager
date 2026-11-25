@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { PlayerTransferTermsView } from "../store/generated/PlayerTransferTermsView";
 import type { GameStateData } from "../store/gameStore";
 import { invokeForCareer } from "./careerInvoke";
 
@@ -63,6 +64,32 @@ export async function makeTransferBid(
     playerId,
     fee,
   });
+}
+
+export async function getPlayerTransferTerms(
+  playerId: string,
+): Promise<PlayerTransferTermsView | null> {
+  return invoke("get_player_transfer_terms", { playerId });
+}
+
+export async function makeStructuredTransferBid(
+  playerId: string,
+  totalFee: number,
+  upfrontFee: number,
+  trancheCount: number,
+  intervalDays: number,
+): Promise<TransferNegotiationResponseData> {
+  return invokeForCareer("make_structured_transfer_bid", {
+    playerId,
+    totalFee,
+    upfrontFee,
+    trancheCount,
+    intervalDays,
+  });
+}
+
+export async function recallLoan(playerId: string): Promise<GameStateData> {
+  return invokeForCareer("recall_loan", { playerId });
 }
 
 export async function makeLoanOffer(
@@ -153,10 +180,12 @@ export async function getBidNegotiationStatus(playerId: string): Promise<BidNego
 export async function previewTransferBidFinancialImpact(
   playerId: string,
   fee: number,
+  upfrontFee?: number,
 ): Promise<TransferBidProjectionData> {
   return invoke<TransferBidProjectionData>("preview_transfer_bid_financial_impact", {
     playerId,
     fee,
+    ...(upfrontFee !== undefined ? { upfrontFee } : {}),
   });
 }
 

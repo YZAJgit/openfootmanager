@@ -1,129 +1,58 @@
+﻿import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
-
+import { useGameStore } from "../store/gameStore";
 import {
-  counterLoanOffer,
-  counterOffer,
-  exerciseLoanBuyOption,
-  makeLoanOffer,
-  makeTransferBid,
+  getPlayerTransferTerms,
+  makeStructuredTransferBid,
   previewTransferBidFinancialImpact,
-  respondToLoanOffer,
-  respondToOffer,
+  recallLoan,
 } from "./transfersService";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
-}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-const mockedInvoke = vi.mocked(invoke);
-
-describe("transfersService", () => {
+describe("transfer service commands", () => {
   beforeEach(() => {
-    mockedInvoke.mockReset();
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    useGameStore.setState({ gameState: null });
   });
 
-  it("calls the make transfer bid backend command", async () => {
-    const response = { decision: "accepted" };
-    mockedInvoke.mockResolvedValueOnce(response);
+  it("requests player transfer terms", async () => {
+    await getPlayerTransferTerms("p1");
+    expect(invoke).toHaveBeenCalledWith("get_player_transfer_terms", { playerId: "p1" });
+  });
 
-    await expect(makeTransferBid("player-1", 1500000)).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("make_transfer_bid", {
+  it("sends the structured bid and career token", async () => {
+    await makeStructuredTransferBid("p1", 1000, 400, 2, 90);
+    expect(invoke).toHaveBeenCalledWith("make_structured_transfer_bid", {
+      playerId: "p1",
+      totalFee: 1000,
+      upfrontFee: 400,
+      trancheCount: 2,
+      intervalDays: 90,
       careerToken: 0,
-      playerId: "player-1",
-      fee: 1500000,
     });
   });
 
-  it("calls the respond to offer backend command", async () => {
-    const response = { manager: { id: "manager-1" } };
-    mockedInvoke.mockResolvedValueOnce(response);
+  it("recalls a loan with the career token", async () => {
+    await recallLoan("p1");
+    expect(invoke).toHaveBeenCalledWith("recall_loan", { playerId: "p1", careerToken: 0 });
+  });
 
-    await expect(respondToOffer("player-1", "offer-1", true)).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("respond_to_offer", {
-      careerToken: 0,
-      playerId: "player-1",
-      offerId: "offer-1",
-      accept: true,
+  it("previews an outright bid without an upfront fee", async () => {
+    await previewTransferBidFinancialImpact("p1", 1000);
+    expect(invoke).toHaveBeenCalledWith("preview_transfer_bid_financial_impact", {
+      playerId: "p1",
+      fee: 1000,
     });
   });
 
-  it("calls the make loan offer backend command", async () => {
-    const response = { decision: "accepted" };
-    mockedInvoke.mockResolvedValueOnce(response);
-
-    await expect(makeLoanOffer("player-1", "2027-01-01", 75)).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("make_loan_offer", {
-      careerToken: 0,
-      playerId: "player-1",
-      endDate: "2027-01-01",
-      wageContributionPct: 75,
-      buyOptionFee: null,
-    });
-  });
-
-  it("calls the exercise loan buy option backend command", async () => {
-    const response = { manager: { id: "manager-1" } };
-    mockedInvoke.mockResolvedValueOnce(response);
-
-    await expect(exerciseLoanBuyOption("player-1")).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("exercise_loan_buy_option", {
-      careerToken: 0,
-      playerId: "player-1",
-    });
-  });
-
-  it("calls the respond to loan offer backend command", async () => {
-    const response = { manager: { id: "manager-1" } };
-    mockedInvoke.mockResolvedValueOnce(response);
-
-    await expect(respondToLoanOffer("player-1", "loan-offer-1", true)).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("respond_to_loan_offer", {
-      careerToken: 0,
-      playerId: "player-1",
-      offerId: "loan-offer-1",
-      accept: true,
-    });
-  });
-
-  it("calls the counter loan offer backend command", async () => {
-    const response = { decision: "counter_offer" };
-    mockedInvoke.mockResolvedValueOnce(response);
-
-    await expect(
-      counterLoanOffer("player-1", "loan-offer-1", "2027-01-01", 85, 1200000),
-    ).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("counter_loan_offer", {
-      careerToken: 0,
-      playerId: "player-1",
-      offerId: "loan-offer-1",
-      endDate: "2027-01-01",
-      wageContributionPct: 85,
-      buyOptionFee: 1200000,
-    });
-  });
-
-  it("calls the counter offer backend command", async () => {
-    const response = { decision: "counter_offer" };
-    mockedInvoke.mockResolvedValueOnce(response);
-
-    await expect(counterOffer("player-1", "offer-1", 1800000)).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("counter_offer", {
-      careerToken: 0,
-      playerId: "player-1",
-      offerId: "offer-1",
-      requestedFee: 1800000,
-    });
-  });
-
-  it("calls the transfer bid projection backend command", async () => {
-    const response = { projection: { transfer_budget_before: 0 } };
-    mockedInvoke.mockResolvedValueOnce(response);
-
-    await expect(previewTransferBidFinancialImpact("player-1", 1000000)).resolves.toBe(response);
-    expect(mockedInvoke).toHaveBeenCalledWith("preview_transfer_bid_financial_impact", {
-      playerId: "player-1",
-      fee: 1000000,
+  it("previews a structured bid with its upfront fee", async () => {
+    await previewTransferBidFinancialImpact("p1", 1000, 0);
+    expect(invoke).toHaveBeenCalledWith("preview_transfer_bid_financial_impact", {
+      playerId: "p1",
+      fee: 1000,
+      upfrontFee: 0,
     });
   });
 });

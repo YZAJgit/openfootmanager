@@ -21,6 +21,7 @@ type ActiveDealWorkspaceProps = {
     | "closeDealWorkspace"
     | "bidTarget"
     | "bidAmount"
+    | "installments"
     | "setBidAmount"
     | "bidFee"
     | "bidProjection"
@@ -77,6 +78,7 @@ type TransferBidDialogProps = {
     | "dealWorkspaceTarget"
     | "gameState"
     | "bidAmount"
+    | "installments"
     | "setBidAmount"
     | "myTeam"
     | "bidFee"
@@ -217,6 +219,7 @@ export function ActiveDealWorkspace({ state }: ActiveDealWorkspaceProps) {
     selectDealWorkspaceKind,
     closeDealWorkspace,
     bidTarget,
+    installments,
     bidAmount,
     setBidAmount,
     bidFee,
@@ -287,6 +290,7 @@ export function ActiveDealWorkspace({ state }: ActiveDealWorkspaceProps) {
                 bidTarget={bidTarget}
                 teams={gameState.teams}
                 bidAmount={bidAmount}
+                installments={installments}
                 onBidAmountChange={setBidAmount}
                 myTeam={myTeam ?? null}
                 bidFee={bidFee}
@@ -383,6 +387,7 @@ export function TransferBidDialog({ state }: TransferBidDialogProps) {
     bidTarget,
     dealWorkspaceTarget,
     gameState,
+    installments,
     bidAmount,
     setBidAmount,
     myTeam,
@@ -409,6 +414,7 @@ export function TransferBidDialog({ state }: TransferBidDialogProps) {
         bidTarget={bidTarget}
         teams={gameState.teams}
         bidAmount={bidAmount}
+        installments={installments}
         onBidAmountChange={setBidAmount}
         myTeam={myTeam ?? null}
         bidFee={bidFee}

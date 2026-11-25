@@ -124,15 +124,17 @@ function pageWithFigures(players: PlayerData[]) {
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(invoke).mockImplementation(async (command: string, payload?: unknown) =>
-    command === "get_players_page"
-      ? pageWithFigures(
-          playersOfScope(payload, {
-            market: MARKET,
-            user_listed: [],
-            with_offers: [ownWithLoanOffer],
-          }),
-        )
-      : {},
+    command === "get_player_transfer_terms"
+      ? null
+      : command === "get_players_page"
+        ? pageWithFigures(
+            playersOfScope(payload, {
+              market: MARKET,
+              user_listed: [],
+              with_offers: [ownWithLoanOffer],
+            }),
+          )
+        : {},
   );
 });
 
@@ -232,7 +234,11 @@ async function changeGameWithTheCentreOpen(
   );
   expect(within(await rowOf("Division Rival")).getByText("71")).toBeInTheDocument();
   vi.mocked(invoke).mockImplementation(async (command: string) =>
-    command === "get_players_page" ? nextPage() : {},
+    command === "get_player_transfer_terms"
+      ? null
+      : command === "get_players_page"
+        ? nextPage()
+        : {},
   );
   rerender(
     <TransfersTab

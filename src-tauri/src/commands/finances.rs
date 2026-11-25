@@ -2,6 +2,7 @@ use log::info;
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::State;
+use ts_rs::TS;
 
 use ofm_core::finances::{
     BoardSupportResult, FinanceActionPreviews, MarketingCampaignResult, SponsorPitchResult,
@@ -32,6 +33,101 @@ pub struct SponsorPitchCommandResponse {
 pub struct MarketingCampaignCommandResponse {
     pub game: Game,
     pub result: MarketingCampaignResult,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+pub enum InstallmentDirection {
+    Payable,
+    Receivable,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+pub struct TransferInstallmentView {
+    pub id: String,
+    pub direction: InstallmentDirection,
+    pub counterparty_team_id: String,
+    pub counterparty_team_name: String,
+    pub player_id: String,
+    pub player_name: String,
+    pub amount: i64,
+    pub due_date: String,
+    pub settled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+pub struct TransferInstallmentsSummaryView {
+    pub outstanding_owed: i64,
+    pub outstanding_receivable: i64,
+    pub installments: Vec<TransferInstallmentView>,
+}
+
+#[tauri::command]
+pub fn get_transfer_installments(
+    state: State<'_, Arc<StateManager>>,
+) -> Result<Option<TransferInstallmentsSummaryView>, String> {
+    get_transfer_installments_internal(&state)
+}
+
+pub fn get_transfer_installments_internal(
+    state: &StateManager,
+) -> Result<Option<TransferInstallmentsSummaryView>, String> {
+    state
+        .get_game(|game| {
+            let team_id = game.manager.team_id.as_ref()?;
+            let outstanding_receivable = game
+                .transfer_installments
+                .iter()
+                .filter(|item| !item.settled && &item.seller_team_id == team_id)
+                .fold(0i64, |total, item| total.saturating_add(item.amount));
+            let mut installments: Vec<_> = game
+                .transfer_installments
+                .iter()
+                .filter(|item| &item.buyer_team_id == team_id || &item.seller_team_id == team_id)
+                .map(|item| {
+                    let payable = &item.buyer_team_id == team_id;
+                    let counterparty = if payable {
+                        &item.seller_team_id
+                    } else {
+                        &item.buyer_team_id
+                    };
+                    TransferInstallmentView {
+                        id: item.id.clone(),
+                        direction: if payable {
+                            InstallmentDirection::Payable
+                        } else {
+                            InstallmentDirection::Receivable
+                        },
+                        counterparty_team_id: counterparty.clone(),
+                        counterparty_team_name: game
+                            .teams
+                            .iter()
+                            .find(|team| &team.id == counterparty)
+                            .map_or_else(|| counterparty.clone(), |team| team.name.clone()),
+                        player_id: item.player_id.clone(),
+                        player_name: game
+                            .players
+                            .iter()
+                            .find(|player| player.id == item.player_id)
+                            .map_or_else(
+                                || item.player_id.clone(),
+                                |player| player.full_name.clone(),
+                            ),
+                        amount: item.amount,
+                        due_date: item.due_date.clone(),
+                        settled: item.settled,
+                    }
+                })
+                .collect();
+            installments.sort_by(|a, b| {
+                (a.settled, &a.due_date, &a.id).cmp(&(b.settled, &b.due_date, &b.id))
+            });
+            Some(TransferInstallmentsSummaryView {
+                outstanding_owed: ofm_core::finances::outstanding_installments_owed(game, team_id),
+                outstanding_receivable,
+                installments,
+            })
+        })
+        .ok_or_else(|| "be.error.noActiveGameSession".to_string())
 }
 
 #[tauri::command]
@@ -170,6 +266,57 @@ mod tests {
     use ofm_core::game::Game;
     use ofm_core::state::Career;
     use ofm_core::state::StateManager;
+
+    #[test]
+    fn transfer_installments_project_totals_and_order() {
+        use domain::finance::TransferInstallment;
+        let state = StateManager::new();
+        let mut game = make_game();
+        game.manager.team_id = None;
+        state.set_game(game.clone());
+        assert!(super::get_transfer_installments_internal(&state)
+            .unwrap()
+            .is_none());
+        game.manager.team_id = Some("team-1".into());
+        let item = |id: &str, buyer: &str, seller: &str, due: &str, settled| TransferInstallment {
+            id: id.into(),
+            buyer_team_id: buyer.into(),
+            seller_team_id: seller.into(),
+            player_id: "player-1".into(),
+            amount: 100,
+            due_date: due.into(),
+            settled,
+            created_date: "2026-01-01".into(),
+        };
+        game.transfer_installments = vec![
+            item("settled", "team-1", "other", "2026-01-01", true),
+            item("payable", "team-1", "other", "2026-10-01", false),
+            item("receivable", "other", "team-1", "2026-09-01", false),
+        ];
+        state.set_game(game);
+        let view = super::get_transfer_installments_internal(&state)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (view.outstanding_owed, view.outstanding_receivable),
+            (100, 100)
+        );
+        assert_eq!(
+            view.installments
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["receivable", "payable", "settled"]
+        );
+        assert_eq!(
+            view.installments[0].direction,
+            super::InstallmentDirection::Receivable
+        );
+        assert_eq!(
+            view.installments[1].direction,
+            super::InstallmentDirection::Payable
+        );
+    }
 
     fn make_team() -> Team {
         let mut team = Team::new(

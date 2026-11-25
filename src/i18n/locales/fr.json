@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Échéances de transfert",
+        "outstandingOwed": "Reste à payer",
+        "outstandingReceivable": "Reste à recevoir",
+        "payable": "À payer",
+        "receivable": "À recevoir",
+        "upcoming": "À venir",
+        "settled": "Réglé",
+        "dueDate": "Échéance : {{date}}",
+        "empty": "Aucune échéance de transfert prévue."
+      },
     "overview": "Aperçu Financier",
     "wageBill": "Masse Salariale",
     "weeklyTotal": "Total Hebdomadaire",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Clause libératoire",
+      "triggerReleaseClause": "Lever la clause libératoire",
+      "paymentStructure": "Modalités de paiement",
+      "outrightPayment": "Paiement comptant",
+      "installmentsPayment": "Paiement échelonné",
+      "installmentsWindowClosed": "Les offres avec paiement échelonné sont possibles uniquement pendant le mercato.",
+      "upfrontFee": "Paiement initial",
+      "trancheCount": "Échéances (1–6)",
+      "intervalDays": "Intervalle (jours)",
+      "deferredBalance": "Solde différé",
+      "competingBids": "Offres concurrentes",
+      "recallLoan": "Rappeler du prêt",
+      "recallingLoan": "Rappel en cours...",
     "offerHistory": "Historique des offres",
     "viewOfferHistory": "Voir l’historique des offres",
     "offerRecordedOn": "Offre du {{date}}.",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "La profondeur de l'historique généré doit être de 24 saisons ou moins."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Le nombre de versements doit être compris entre 1 et 6.",
+          "trancheInterval": "L'intervalle entre les versements doit être compris entre 30 et 365 jours.",
+          "nothingDeferred": "Le paiement initial doit être inférieur au montant total du transfert.",
+          "feeTooLarge": "Le montant du transfert dépasse le maximum autorisé."
+        },
         "transferWindowClosed": "Le mercato est fermé",
         "cannotBidOnOwnPlayer": "Vous ne pouvez pas faire une offre pour votre propre joueur",
         "playerHasNoTeam": "Le joueur n'a pas d'équipe",

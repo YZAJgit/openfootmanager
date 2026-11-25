@@ -6,7 +6,11 @@ mod crash;
 mod main_window;
 mod platform;
 mod report;
+pub use commands::finances::{
+    InstallmentDirection, TransferInstallmentView, TransferInstallmentsSummaryView,
+};
 pub use commands::slices::{PlayerCharacterView, TeamChemistryView};
+pub use commands::transfers::{CompetingBidView, PlayerTransferTermsView};
 pub use commands::world_library::{WorldLibraryRow, WorldsLibrary};
 pub use commands::youth::{
     HomeGrownSummaryView, ScholarStatusView, YouthAcademyOverview, YouthLoanMinutesStatusView,
@@ -273,6 +277,7 @@ pub fn run() {
             decide_scholarship_action,
             recall_youth_loan_breach,
             get_finance_snapshot,
+            get_transfer_installments,
             request_board_support,
             request_marketing_campaign,
             request_sponsor_pitch,
@@ -329,6 +334,9 @@ pub fn run() {
             save_game,
             auto_select_set_pieces,
             toggle_transfer_list,
+            get_player_transfer_terms,
+            recall_loan,
+            make_structured_transfer_bid,
             toggle_loan_list,
             make_transfer_bid,
             make_loan_offer,

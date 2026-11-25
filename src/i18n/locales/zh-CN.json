@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "转会分期付款",
+        "outstandingOwed": "应付余额",
+        "outstandingReceivable": "应收余额",
+        "payable": "应付",
+        "receivable": "应收",
+        "upcoming": "未到期",
+        "settled": "已结清",
+        "dueDate": "到期日：{{date}}",
+        "empty": "没有已安排的转会分期付款。"
+      },
     "overview": "财务概览",
     "wageBill": "工资总额",
     "weeklyTotal": "每周合计",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "解约金条款",
+      "triggerReleaseClause": "支付解约金",
+      "paymentStructure": "付款方式",
+      "outrightPayment": "一次性付款",
+      "installmentsPayment": "分期付款",
+      "installmentsWindowClosed": "仅可在转会窗口开放期间提出分期报价。",
+      "upfrontFee": "首付款",
+      "trancheCount": "分期期数（1–6）",
+      "intervalDays": "付款间隔（天）",
+      "deferredBalance": "剩余分期款",
+      "competingBids": "竞争报价",
+      "recallLoan": "从租借中召回",
+      "recallingLoan": "正在召回...",
     "offerHistory": "报价历史",
     "viewOfferHistory": "查看报价历史",
     "offerRecordedOn": "报价日期：{{date}}。",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "生成历史深度必须为 24 个赛季或更少。"
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "分期付款次数必须在 1 到 6 次之间。",
+          "trancheInterval": "分期付款间隔必须在 30 到 365 天之间。",
+          "nothingDeferred": "首付款必须低于转会费总额。",
+          "feeTooLarge": "转会费超过支持的最高金额。"
+        },
         "transferWindowClosed": "转会窗口已关闭",
         "cannotBidOnOwnPlayer": "你不能为自己的球员报价",
         "playerHasNoTeam": "该球员没有所属球队",

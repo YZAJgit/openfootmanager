@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Transferraten",
+        "outstandingOwed": "Ausstehende Verbindlichkeiten",
+        "outstandingReceivable": "Ausstehende Forderungen",
+        "payable": "Zu zahlen",
+        "receivable": "Zu erhalten",
+        "upcoming": "Ausstehend",
+        "settled": "Beglichen",
+        "dueDate": "Fällig am {{date}}",
+        "empty": "Keine Transferraten geplant."
+      },
     "overview": "Finanzübersicht",
     "wageBill": "Gehaltsliste",
     "weeklyTotal": "Wöchentlich Gesamt",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Ausstiegsklausel",
+      "triggerReleaseClause": "Ausstiegsklausel ziehen",
+      "paymentStructure": "Zahlungsstruktur",
+      "outrightPayment": "Sofortzahlung",
+      "installmentsPayment": "Ratenzahlung",
+      "installmentsWindowClosed": "Ratenangebote sind nur während des Transferfensters möglich.",
+      "upfrontFee": "Anzahlung",
+      "trancheCount": "Raten (1–6)",
+      "intervalDays": "Abstand (Tage)",
+      "deferredBalance": "Ausstehender Restbetrag",
+      "competingBids": "Konkurrierende Angebote",
+      "recallLoan": "Aus Leihe zurückholen",
+      "recallingLoan": "Rückholung läuft...",
     "offerHistory": "Angebotsverlauf",
     "viewOfferHistory": "Angebotsverlauf ansehen",
     "offerRecordedOn": "Angebot vom {{date}}.",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "Die Tiefe der generierten Historie muss 24 Saisons oder weniger betragen."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Die Anzahl der Raten muss zwischen 1 und 6 liegen.",
+          "trancheInterval": "Der Abstand zwischen den Raten muss zwischen 30 und 365 Tagen liegen.",
+          "nothingDeferred": "Die Vorauszahlung muss geringer als die gesamte Ablösesumme sein.",
+          "feeTooLarge": "Die Ablösesumme überschreitet den maximal unterstützten Betrag."
+        },
         "transferWindowClosed": "Das Transferfenster ist geschlossen",
         "cannotBidOnOwnPlayer": "Du kannst nicht auf deinen eigenen Spieler bieten",
         "playerHasNoTeam": "Der Spieler hat kein Team",

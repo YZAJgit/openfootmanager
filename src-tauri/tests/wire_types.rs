@@ -24,6 +24,9 @@ const REGENERATE_VAR: &str = "OFM_UPDATE_TS_TYPES";
 /// The types a Tauri command hands the frontend whole. Everything they reach is generated with
 /// them; a type is added here only when a command returns it and nothing listed already reaches it.
 fn visit_wire_roots(visitor: &mut impl TypeVisitor) {
+    visitor.visit::<openfootmanager_lib::TransferInstallmentsSummaryView>();
+    visitor.visit::<openfootmanager_lib::PlayerTransferTermsView>();
+    visitor.visit::<openfootmanager_lib::CompetingBidView>();
     visitor.visit::<openfootmanager_lib::YouthAcademyOverview>();
     visitor.visit::<openfootmanager_lib::WorldsLibrary>();
     visitor.visit::<ofm_core::game::Game>();

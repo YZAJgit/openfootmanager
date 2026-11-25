@@ -1,3 +1,4 @@
+import type { TransferInstallmentsSummaryView } from "../store/generated/TransferInstallmentsSummaryView";
 import { invoke } from "@tauri-apps/api/core";
 
 export type FinanceHealthLevelData = "stable" | "watch" | "warning" | "critical";
@@ -206,4 +207,8 @@ export async function getFinanceSnapshot(teamId?: string): Promise<FinanceSnapsh
     snapshot: mapSnapshot(response.snapshot),
     previews: mapPreviews(response.previews),
   };
+}
+
+export function getTransferInstallments(): Promise<TransferInstallmentsSummaryView | null> {
+  return invoke<TransferInstallmentsSummaryView | null>("get_transfer_installments");
 }

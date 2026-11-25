@@ -1,3 +1,4 @@
+import { TransferInstallmentsCard } from "./TransferInstallmentsCard";
 import { useFinanceView } from "./useFinanceView";
 import { FinanceWageSummary } from "./FinanceWageSummary";
 import { FinanceCashFlowCard } from "./FinanceCashFlowCard";
@@ -165,6 +166,15 @@ function FinancesTabLoaded(props: FinancesTabLoadedProps) {
       <FinanceWageSummary state={view} />
 
       <FinanceCashFlowCard state={view} />
+
+      <TransferInstallmentsCard
+        refreshKey={[
+          myTeam.id,
+          props.gameState.clock.current_date,
+          props.gameState.career_token ?? 0,
+          props.gameState.revision ?? 0,
+        ].join(":")}
+      />
 
       <FinanceContractRiskCard state={view} />
 

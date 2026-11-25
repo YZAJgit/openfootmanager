@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Plazos de fichajes",
+        "outstandingOwed": "Pendiente de pago",
+        "outstandingReceivable": "Pendiente de cobro",
+        "payable": "A pagar",
+        "receivable": "A cobrar",
+        "upcoming": "Pendiente",
+        "settled": "Liquidado",
+        "dueDate": "Vencimiento: {{date}}",
+        "empty": "No hay pagos de fichajes programados."
+      },
     "overview": "Resumen Financiero",
     "wageBill": "Masa Salarial",
     "weeklyTotal": "Total Semanal",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Cláusula de rescisión",
+      "triggerReleaseClause": "Ejecutar cláusula de rescisión",
+      "paymentStructure": "Forma de pago",
+      "outrightPayment": "Pago único",
+      "installmentsPayment": "Plazos",
+      "installmentsWindowClosed": "Las ofertas a plazos solo están disponibles durante el mercado de fichajes.",
+      "upfrontFee": "Pago inicial",
+      "trancheCount": "Plazos (1–6)",
+      "intervalDays": "Intervalo (días)",
+      "deferredBalance": "Importe aplazado",
+      "competingBids": "Ofertas rivales",
+      "recallLoan": "Recuperar de la cesión",
+      "recallingLoan": "Recuperando...",
     "offerHistory": "Historial de ofertas",
     "viewOfferHistory": "Ver historial de ofertas",
     "offerRecordedOn": "Oferta del {{date}}.",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "La profundidad de la historia generada debe ser de 24 temporadas o menos."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "El número de cuotas debe estar entre 1 y 6.",
+          "trancheInterval": "El intervalo entre cuotas debe ser de entre 30 y 365 días.",
+          "nothingDeferred": "El pago inicial debe ser inferior al importe total del traspaso.",
+          "feeTooLarge": "El importe del traspaso supera el máximo permitido."
+        },
         "transferWindowClosed": "El mercado de fichajes está cerrado",
         "cannotBidOnOwnPlayer": "No puedes pujar por tu propio jugador",
         "playerHasNoTeam": "El jugador no tiene equipo",

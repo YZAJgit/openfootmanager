@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Трансферные платежи",
+        "outstandingOwed": "Осталось выплатить",
+        "outstandingReceivable": "Осталось получить",
+        "payable": "К выплате",
+        "receivable": "К получению",
+        "upcoming": "Предстоящий",
+        "settled": "Оплачен",
+        "dueDate": "Срок оплаты: {{date}}",
+        "empty": "Запланированных трансферных платежей нет."
+      },
     "overview": "Финансовый обзор",
     "wageBill": "Фонд зарплат",
     "weeklyTotal": "Итого в неделю",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Отступные",
+      "triggerReleaseClause": "Активировать пункт об отступных",
+      "paymentStructure": "Схема оплаты",
+      "outrightPayment": "Единым платежом",
+      "installmentsPayment": "В рассрочку",
+      "installmentsWindowClosed": "Предложения с рассрочкой доступны только во время трансферного окна.",
+      "upfrontFee": "Первоначальный взнос",
+      "trancheCount": "Платежи (1–6)",
+      "intervalDays": "Интервал (дней)",
+      "deferredBalance": "Остаток к выплате",
+      "competingBids": "Конкурирующие предложения",
+      "recallLoan": "Отозвать из аренды",
+      "recallingLoan": "Отзыв из аренды...",
     "offerHistory": "История предложений",
     "viewOfferHistory": "Просмотреть историю предложений",
     "offerRecordedOn": "Предложение от {{date}}.",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "Глубина созданной истории должна составлять 24 сезона или меньше."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Количество платежей должно быть от 1 до 6.",
+          "trancheInterval": "Интервал между платежами должен составлять от 30 до 365 дней.",
+          "nothingDeferred": "Первоначальный платёж должен быть меньше общей суммы трансфера.",
+          "feeTooLarge": "Сумма трансфера превышает максимально допустимое значение."
+        },
         "transferWindowClosed": "Трансферное окно закрыто",
         "cannotBidOnOwnPlayer": "Невозможно сделать ставку на своего игрока",
         "playerHasNoTeam": "У игрока нет команды",

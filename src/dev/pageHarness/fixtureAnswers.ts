@@ -89,6 +89,13 @@ function profileHandlers(profile: HarnessProfile): CommandHandlers {
     // Rust answers every requested player in the world and leaves out an id no player has (the
     // retiree's). The fixture knows one player: a request for another active one is declined, not
     // answered with a gap the page would read as "unknown".
+    get_player_transfer_terms: ({ playerId }) =>
+      about(playerId, {
+        release_clause: null,
+        structured_bid_allowed: true,
+        loan_recallable: false,
+        competing_bids: [],
+      }),
     get_player_knowledge: ({ playerIds }) => {
       const asked = Array.isArray(playerIds) ? playerIds : [];
       const activeIds = new Set(fixture.gameState.players.map((player) => player.id));
@@ -154,6 +161,11 @@ export function fixtureHandlers(
       loaned_youth: [],
     }),
     // No team id means the manager's club, as in the Rust command.
+    get_transfer_installments: () => ({
+      outstanding_owed: 0,
+      outstanding_receivable: 0,
+      installments: [],
+    }),
     get_finance_snapshot: ({ teamId }) =>
       forUserClub(teamId ?? USER_CLUB, () => ({
         snapshot: fixture.financeSnapshot,

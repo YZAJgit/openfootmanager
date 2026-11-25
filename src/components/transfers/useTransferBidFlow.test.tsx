@@ -1,4 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { JSX } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +15,7 @@ import {
   type BidNegotiationStatusData,
   getBidNegotiationStatus,
   makeTransferBid,
+  makeStructuredTransferBid,
   previewTransferBidFinancialImpact,
 } from "../../services/transfersService";
 import { useTransferBidFlow } from "./useTransferBidFlow";
@@ -15,6 +24,7 @@ import { createSeasonContext } from "../../test-utils/factories";
 vi.mock("../../services/transfersService", () => ({
   getBidNegotiationStatus: vi.fn(),
   makeTransferBid: vi.fn(),
+  makeStructuredTransferBid: vi.fn(),
   previewTransferBidFinancialImpact: vi.fn(),
 }));
 
@@ -267,6 +277,64 @@ describe("useTransferBidFlow", (): void => {
    * Then submitting is disabled, as it is for a fee over the budget, and a bid the board accepts
    *      is not.
    */
+  it("previews and submits structured payments and exposes backend errors", async () => {
+    const target = createPlayer();
+    const structured = vi.mocked(makeStructuredTransferBid);
+    structured.mockReset();
+    structured.mockRejectedValueOnce(new Error("Structured bid failed"));
+    const { result } = renderHook(() =>
+      useTransferBidFlow({ gameState: createGameState([target]) }),
+    );
+    act(() => result.current.openBidNegotiation(target));
+    act(() => {
+      result.current.installments.setEnabled(true);
+      result.current.installments.setUpfront(300000);
+      result.current.installments.setCount(3);
+      result.current.installments.setInterval(120);
+    });
+    await waitFor(() =>
+      expect(mockedPreviewTransferBidFinancialImpact).toHaveBeenCalledWith(
+        target.id,
+        result.current.bidFee,
+        300000,
+      ),
+    );
+    const fee = result.current.bidFee;
+    await act(async () => result.current.handleMakeBid());
+    expect(structured).toHaveBeenCalledWith(target.id, fee, 300000, 3, 120);
+    expect(result.current.bidResult).toBe("error");
+    expect(result.current.bidError).toBe("Structured bid failed");
+  });
+
+  it("ignores a bid rejection from a previous session", async () => {
+    const target = createPlayer();
+    let reject!: (error: Error) => void;
+    mockedMakeTransferBid.mockReturnValueOnce(
+      new Promise((_resolve, rejectPromise) => {
+        reject = rejectPromise;
+      }),
+    );
+    const { result } = renderHook(() =>
+      useTransferBidFlow({ gameState: createGameState([target]) }),
+    );
+    act(() => result.current.openBidNegotiation(target));
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.handleMakeBid();
+    });
+    act(() => {
+      result.current.closeBidNegotiation();
+      result.current.openBidNegotiation(target);
+    });
+    await act(async () => {
+      reject(new Error("stale"));
+      await pending;
+    });
+    expect(result.current.bidError).toBeNull();
+    expect(result.current.bidResult).toBeNull();
+    expect(result.current.bidLoading).toBe(false);
+  });
+
   it("disables submitting a bid whose wage the board would refuse", async (): Promise<void> => {
     const open = async (blocked: boolean) => {
       const target = createPlayer();

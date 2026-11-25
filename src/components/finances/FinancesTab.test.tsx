@@ -14,6 +14,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { resolveBackendError } from "../../utils/backendI18n";
 import FinancesTab from "./FinancesTab";
 
+vi.mock("./TransferInstallmentsCard", () => ({ TransferInstallmentsCard: () => null }));
+
 // What the backend's contract warning stages read as on a badge, by player id; a test says which
 // players are at risk. The hook that asks for them has its own test.
 const riskLevels = vi.hoisted(() => ({

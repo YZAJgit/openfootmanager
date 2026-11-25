@@ -40,6 +40,8 @@ export const SCREEN_WRITE_COMMANDS = [
   "toggle_transfer_list",
   "toggle_loan_list",
   "make_transfer_bid",
+  "make_structured_transfer_bid",
+  "recall_loan",
   "make_loan_offer",
   "exercise_loan_buy_option",
   "respond_to_offer",

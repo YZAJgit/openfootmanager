@@ -30,6 +30,7 @@ export default function PlayerProfileModals({
           bidTarget={bid.bidTarget}
           teams={teams}
           bidAmount={bid.bidAmount}
+          installments={bid.installments}
           onBidAmountChange={bid.setBidAmount}
           myTeam={bid.myTeam}
           bidFee={bid.bidFee}
@@ -41,6 +42,7 @@ export default function PlayerProfileModals({
           bidResult={bid.bidResult}
           bidLoading={bid.bidLoading}
           bidSubmitDisabled={bid.bidSubmitDisabled}
+          bidError={bid.bidError}
           onSubmit={bid.handleMakeBid}
           onClose={bid.closeBidNegotiation}
         />

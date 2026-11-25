@@ -93,7 +93,7 @@ pub(crate) fn minimum_acceptable_fee(
 }
 /// The fee that triggers `player`'s release clause, when his contract has one. A clause of zero or
 /// less is no clause.
-pub(crate) fn release_clause_fee(player: &domain::player::Player) -> Option<u64> {
+pub fn release_clause_fee(player: &domain::player::Player) -> Option<u64> {
     player
         .release_clause
         .and_then(|clause| u64::try_from(clause).ok())

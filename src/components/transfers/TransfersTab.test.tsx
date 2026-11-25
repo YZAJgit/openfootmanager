@@ -68,6 +68,7 @@ describe("TransfersTab", (): void => {
     mockedIsTauri.mockReturnValue(false);
     marketAnswer = () => marketPageOf([]);
     mockedInvoke.mockImplementation(async (command: string, payload?: InvokeArgs) => {
+      if (command === "get_player_transfer_terms") return null;
       const args = payload as MockInvokePayload | undefined;
       if (command === "get_players_page") {
         return marketAnswer((payload as { query: PlayersPageQuery }).query);

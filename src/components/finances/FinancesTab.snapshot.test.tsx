@@ -117,13 +117,15 @@ describe("FinancesTab backend snapshot", () => {
    */
   it("draws the cash-flow chart from the snapshot's weeks, not the old ledger", async () => {
     chartWeeks.current = undefined;
-    mockedInvoke.mockResolvedValue(
-      wireSnapshot({
-        cash_flow: [
-          { week_start: "2025-01-06", income: 25000, expenses: 40000 },
-          { week_start: "2025-01-13", income: 310000, expenses: 40000 },
-        ],
-      }),
+    mockedInvoke.mockImplementation(async (command) =>
+      command === "get_transfer_installments"
+        ? { outstanding_owed: 0, outstanding_receivable: 0, installments: [] }
+        : wireSnapshot({
+            cash_flow: [
+              { week_start: "2025-01-06", income: 25000, expenses: 40000 },
+              { week_start: "2025-01-13", income: 310000, expenses: 40000 },
+            ],
+          }),
     );
 
     await renderFinances(<FinancesTab gameState={createGameState({ financial_ledger: [] })} />);
@@ -144,7 +146,11 @@ describe("FinancesTab backend snapshot", () => {
    * Then no chart is drawn, rather than an empty one.
    */
   it("draws no cash-flow chart before any money has moved", async () => {
-    mockedInvoke.mockResolvedValue(wireSnapshot());
+    mockedInvoke.mockImplementation(async (command) =>
+      command === "get_transfer_installments"
+        ? { outstanding_owed: 0, outstanding_receivable: 0, installments: [] }
+        : wireSnapshot(),
+    );
 
     await renderFinances(<FinancesTab gameState={createGameState()} />);
 
@@ -376,11 +382,15 @@ describe("FinancesTab backend snapshot", () => {
 it("refreshes commitments when a fresh slim career state has the same finance key", async () => {
   riskLevels.current = {};
   mockedInvoke.mockReset();
-  mockedInvoke
-    .mockResolvedValueOnce(wireSnapshot())
-    .mockResolvedValueOnce(
-      wireSnapshot({ committed_transfer_fees: 80000, available_transfer_budget: 220000 }),
-    );
+  let snapshotCalls = 0;
+  mockedInvoke.mockImplementation(async (command) => {
+    if (command === "get_transfer_installments")
+      return { outstanding_owed: 0, outstanding_receivable: 0, installments: [] };
+    snapshotCalls += 1;
+    return snapshotCalls === 1
+      ? wireSnapshot()
+      : wireSnapshot({ committed_transfer_fees: 80000, available_transfer_budget: 220000 });
+  });
   const gameState = createGameState({}, [], []);
   const view = await renderFinances(<FinancesTab gameState={gameState} />);
   expect(screen.getByText(/300/)).toBeInTheDocument();

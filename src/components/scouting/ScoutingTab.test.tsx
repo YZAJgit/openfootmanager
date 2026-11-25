@@ -287,6 +287,7 @@ describe("ScoutingTab", () => {
     marketPlayers = [];
     answers = new Map();
     invokeMock.mockImplementation(async (command: string) => {
+      if (command === "get_player_transfer_terms") return null;
       const canned = answers.get(command);
       if (canned instanceof Error) throw canned;
       if (canned !== undefined) return canned;
@@ -553,6 +554,7 @@ describe("ScoutingTab", () => {
     const onGameUpdate = vi.fn();
 
     invokeMock.mockImplementation(async (command: string) => {
+      if (command === "get_player_transfer_terms") return null;
       if (command === "get_players_page") {
         return marketPageOf(marketPlayers);
       }

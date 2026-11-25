@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Transfer Installments",
+        "outstandingOwed": "Outstanding owed",
+        "outstandingReceivable": "Outstanding receivable",
+        "payable": "Payable",
+        "receivable": "Receivable",
+        "upcoming": "Upcoming",
+        "settled": "Settled",
+        "dueDate": "Due {{date}}",
+        "empty": "No transfer installments scheduled."
+      },
     "overview": "Financial Overview",
     "wageBill": "Wage Bill",
     "weeklyTotal": "Weekly Total",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Release clause",
+      "triggerReleaseClause": "Trigger release clause",
+      "paymentStructure": "Payment structure",
+      "outrightPayment": "Outright",
+      "installmentsPayment": "Installments",
+      "installmentsWindowClosed": "Installment offers are only available while the transfer window is open.",
+      "upfrontFee": "Upfront payment",
+      "trancheCount": "Installments (1–6)",
+      "intervalDays": "Interval (days)",
+      "deferredBalance": "Deferred balance",
+      "competingBids": "Competing bids",
+      "recallLoan": "Recall loan",
+      "recallingLoan": "Recalling...",
     "offerHistory": "Offer history",
     "viewOfferHistory": "View offer history",
     "offerRecordedOn": "Offer dated {{date}}.",
@@ -3263,6 +3287,12 @@
         "historyDepthMax": "Generated history depth must be 24 seasons or fewer."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Installment count must be between 1 and 6.",
+          "trancheInterval": "Installment interval must be between 30 and 365 days.",
+          "nothingDeferred": "Upfront payment must be less than the total transfer fee.",
+          "feeTooLarge": "Transfer fee exceeds the maximum supported amount."
+        },
         "transferWindowClosed": "Transfer window is closed",
         "cannotBidOnOwnPlayer": "Cannot bid on your own player",
         "playerHasNoTeam": "Player has no team",

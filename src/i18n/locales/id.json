@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Cicilan Transfer",
+        "outstandingOwed": "Sisa utang",
+        "outstandingReceivable": "Sisa piutang",
+        "payable": "Harus dibayar",
+        "receivable": "Akan diterima",
+        "upcoming": "Mendatang",
+        "settled": "Lunas",
+        "dueDate": "Jatuh tempo {{date}}",
+        "empty": "Tidak ada cicilan transfer terjadwal."
+      },
     "overview": "Ringkasan Keuangan",
     "wageBill": "Beban Gaji",
     "weeklyTotal": "Total Mingguan",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Klausul pelepasan",
+      "triggerReleaseClause": "Aktifkan klausul pelepasan",
+      "paymentStructure": "Skema pembayaran",
+      "outrightPayment": "Lunas sekaligus",
+      "installmentsPayment": "Cicilan",
+      "installmentsWindowClosed": "Tawaran cicilan hanya tersedia saat bursa transfer dibuka.",
+      "upfrontFee": "Pembayaran awal",
+      "trancheCount": "Jumlah cicilan (1–6)",
+      "intervalDays": "Jeda (hari)",
+      "deferredBalance": "Sisa pembayaran",
+      "competingBids": "Tawaran pesaing",
+      "recallLoan": "Panggil kembali dari peminjaman",
+      "recallingLoan": "Memanggil kembali...",
     "offerHistory": "Riwayat tawaran",
     "viewOfferHistory": "Lihat riwayat tawaran",
     "offerRecordedOn": "Tawaran tertanggal {{date}}.",
@@ -3263,6 +3287,12 @@
         "historyDepthMax": "Kedalaman riwayat yang dihasilkan harus maksimal 24 musim."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Jumlah cicilan harus antara 1 dan 6.",
+          "trancheInterval": "Jarak antar cicilan harus antara 30 dan 365 hari.",
+          "nothingDeferred": "Pembayaran di muka harus lebih kecil daripada total biaya transfer.",
+          "feeTooLarge": "Biaya transfer melebihi batas maksimum yang didukung."
+        },
         "transferWindowClosed": "Bursa transfer ditutup",
         "cannotBidOnOwnPlayer": "Tidak dapat menawar pemain sendiri",
         "playerHasNoTeam": "Pemain tidak memiliki tim",

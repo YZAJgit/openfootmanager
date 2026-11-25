@@ -1207,6 +1207,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Rate dei trasferimenti",
+        "outstandingOwed": "Debito residuo",
+        "outstandingReceivable": "Credito residuo",
+        "payable": "Da pagare",
+        "receivable": "Da ricevere",
+        "upcoming": "In arrivo",
+        "settled": "Saldato",
+        "dueDate": "Scadenza: {{date}}",
+        "empty": "Nessuna rata di trasferimento programmata."
+      },
     "overview": "Panoramica finanziaria",
     "wageBill": "Monte ingaggi",
     "weeklyTotal": "Totale settimanale",
@@ -1434,6 +1445,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Clausola rescissoria",
+      "triggerReleaseClause": "Attiva la clausola rescissoria",
+      "paymentStructure": "Modalità di pagamento",
+      "outrightPayment": "Pagamento immediato",
+      "installmentsPayment": "Rate",
+      "installmentsWindowClosed": "Le offerte a rate sono disponibili solo durante la finestra di mercato.",
+      "upfrontFee": "Acconto",
+      "trancheCount": "Rate (1–6)",
+      "intervalDays": "Intervallo (giorni)",
+      "deferredBalance": "Saldo dilazionato",
+      "competingBids": "Offerte concorrenti",
+      "recallLoan": "Richiama dal prestito",
+      "recallingLoan": "Richiamo in corso...",
     "offerHistory": "Storico delle offerte",
     "viewOfferHistory": "Visualizza lo storico delle offerte",
     "offerRecordedOn": "Offerta del {{date}}.",
@@ -3255,6 +3279,12 @@
         "historyDepthMax": "La profondità della storia generata deve essere di 24 stagioni o meno."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Il numero di rate deve essere compreso tra 1 e 6.",
+          "trancheInterval": "L'intervallo tra le rate deve essere compreso tra 30 e 365 giorni.",
+          "nothingDeferred": "Il pagamento iniziale deve essere inferiore al costo totale del trasferimento.",
+          "feeTooLarge": "Il costo del trasferimento supera l'importo massimo supportato."
+        },
         "transferWindowClosed": "La finestra di mercato è chiusa",
         "cannotBidOnOwnPlayer": "Non puoi fare un'offerta per un tuo giocatore",
         "playerHasNoTeam": "Il giocatore non ha una squadra",

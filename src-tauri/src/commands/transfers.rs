@@ -20,6 +20,102 @@ const INVALID_YOUTH_SCOUTING_OBJECTIVE_ERROR: &str =
 const INVALID_YOUTH_SCOUTING_TARGET_POSITION_ERROR: &str =
     "be.error.transfers.invalidYouthScoutingTargetPosition";
 
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+pub struct CompetingBidView {
+    pub offer_id: String,
+    pub from_team_id: String,
+    pub from_team_name: String,
+    pub fee: u64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+pub struct PlayerTransferTermsView {
+    pub release_clause: Option<u64>,
+    pub structured_bid_allowed: bool,
+    pub loan_recallable: bool,
+    pub competing_bids: Vec<CompetingBidView>,
+}
+
+#[tauri::command]
+pub fn get_player_transfer_terms(
+    state: State<'_, Arc<StateManager>>,
+    player_id: String,
+) -> Result<Option<PlayerTransferTermsView>, String> {
+    get_player_transfer_terms_internal(&state, player_id)
+}
+
+pub fn get_player_transfer_terms_internal(
+    state: &StateManager,
+    player_id: String,
+) -> Result<Option<PlayerTransferTermsView>, String> {
+    state
+        .get_game(|game| {
+            game.players
+                .iter()
+                .find(|player| player.id == player_id)
+                .map(|player| PlayerTransferTermsView {
+                    release_clause: ofm_core::transfers::release_clause_fee(player),
+                    structured_bid_allowed: matches!(
+                        game.season_context.transfer_window.status,
+                        domain::season::TransferWindowStatus::Open
+                            | domain::season::TransferWindowStatus::DeadlineDay
+                    ),
+                    loan_recallable: player.loan_recallable
+                        && player.active_loan.as_ref().is_some_and(|loan| {
+                            game.manager.team_id.as_deref() == Some(loan.parent_team_id.as_str())
+                        }),
+                    competing_bids: ofm_core::transfers::competing_bids(player)
+                        .into_iter()
+                        .map(|offer| CompetingBidView {
+                            offer_id: offer.id.clone(),
+                            from_team_id: offer.from_team_id.clone(),
+                            from_team_name: game
+                                .teams
+                                .iter()
+                                .find(|team| team.id == offer.from_team_id)
+                                .map(|team| team.name.clone())
+                                .unwrap_or_else(|| offer.from_team_id.clone()),
+                            fee: offer.fee,
+                            status: format!("{:?}", offer.status),
+                        })
+                        .collect(),
+                })
+        })
+        .ok_or_else(|| "be.error.noActiveGameSession".to_string())
+}
+
+#[tauri::command]
+pub fn recall_loan(
+    state: State<'_, Arc<StateManager>>,
+    player_id: String,
+    career_token: u64,
+) -> Result<Game, String> {
+    recall_loan_internal(&state, Career::Token(career_token), player_id)
+}
+
+pub fn recall_loan_internal(
+    state: &StateManager,
+    career: Career,
+    player_id: String,
+) -> Result<Game, String> {
+    crate::application::live_session::player_role_operation(state, &player_id, || {
+        mutate_active_game_for(state, career, |game| {
+            let team_id = crate::commands::util::user_team_id(game)?;
+            ofm_core::transfers::recall_loan(game, &player_id, &team_id).map_err(|error| {
+                use ofm_core::transfers::LoanRecallRefusal;
+                match error {
+                    LoanRecallRefusal::PlayerNotFound => "be.error.playerNotFound",
+                    LoanRecallRefusal::NotOnLoan => "be.error.playerNotOnLoan",
+                    LoanRecallRefusal::NotParentClub => "be.error.notLoanParentClub",
+                    LoanRecallRefusal::NotRecallable => "be.error.loanNotRecallable",
+                }
+                .to_string()
+            })
+        })
+    })
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TransferNegotiationCommandResponse {
     pub decision: TransferNegotiationDecision,
@@ -97,12 +193,81 @@ pub fn make_transfer_bid(
 }
 
 #[tauri::command]
+pub fn make_structured_transfer_bid(
+    state: State<'_, Arc<StateManager>>,
+    player_id: String,
+    total_fee: u64,
+    upfront_fee: u64,
+    tranche_count: u8,
+    interval_days: u16,
+    career_token: u64,
+) -> Result<TransferNegotiationCommandResponse, String> {
+    make_structured_transfer_bid_internal(
+        &state,
+        Career::Token(career_token),
+        player_id,
+        total_fee,
+        upfront_fee,
+        tranche_count,
+        interval_days,
+    )
+}
+
+pub fn make_structured_transfer_bid_internal(
+    state: &StateManager,
+    career: Career,
+    player_id: String,
+    total_fee: u64,
+    upfront_fee: u64,
+    tranche_count: u8,
+    interval_days: u16,
+) -> Result<TransferNegotiationCommandResponse, String> {
+    use ofm_core::transfers::{InstallmentTerms, InstallmentTermsError, StructuredBidError};
+    crate::application::live_session::player_role_operation(state, &player_id, || {
+        state
+            .update_game_for(career, |live| {
+                let mut game = live.clone();
+                let terms = InstallmentTerms {
+                    upfront_fee,
+                    tranche_count,
+                    interval_days,
+                };
+                let result = ofm_core::transfers::make_structured_transfer_bid(
+                    &mut game, &player_id, total_fee, terms,
+                )
+                .map_err(|error| match error {
+                    StructuredBidError::Bid(message) => message,
+                    StructuredBidError::Terms(terms) => match terms {
+                        InstallmentTermsError::TrancheCount => {
+                            "be.error.transfers.installment.trancheCount"
+                        }
+                        InstallmentTermsError::TrancheInterval => {
+                            "be.error.transfers.installment.trancheInterval"
+                        }
+                        InstallmentTermsError::NothingDeferred => {
+                            "be.error.transfers.installment.nothingDeferred"
+                        }
+                        InstallmentTermsError::FeeTooLarge => {
+                            "be.error.transfers.installment.feeTooLarge"
+                        }
+                    }
+                    .to_string(),
+                })?;
+                *live = game.clone();
+                Ok(map_transfer_negotiation_response(result, game))
+            })
+            .and_then(|response| response)
+    })
+}
+
+#[tauri::command]
 pub fn preview_transfer_bid_financial_impact(
     state: State<'_, Arc<StateManager>>,
     player_id: String,
     fee: u64,
+    upfront_fee: Option<u64>,
 ) -> Result<TransferBidFinancialProjectionCommandResponse, String> {
-    preview_transfer_bid_financial_impact_internal(&state, &player_id, fee)
+    preview_transfer_bid_financial_impact_internal(&state, &player_id, fee, upfront_fee)
 }
 
 #[tauri::command]
@@ -175,9 +340,9 @@ pub fn make_loan_offer_internal(
 ) -> Result<LoanOfferCommandResponse, String> {
     crate::application::live_session::player_role_operation(state, player_id, || {
         info!(
-        "[cmd] make_loan_offer: player_id={}, end_date={}, wage_contribution_pct={}, buy_option_fee={:?}",
-        player_id, end_date, wage_contribution_pct, buy_option_fee
-    );
+            "[cmd] make_loan_offer: player_id={}, end_date={}, wage_contribution_pct={}, buy_option_fee={:?}",
+            player_id, end_date, wage_contribution_pct, buy_option_fee
+        );
         // Worked on a copy and swapped in whole, under the lock and after the career check, so a
         // refusal part way through leaves the live game as it was.
         state
@@ -229,17 +394,22 @@ pub fn preview_transfer_bid_financial_impact_internal(
     state: &StateManager,
     player_id: &str,
     fee: u64,
+    upfront_fee: Option<u64>,
 ) -> Result<TransferBidFinancialProjectionCommandResponse, String> {
     info!(
         "[cmd] preview_transfer_bid_financial_impact: player_id={}, fee={}",
         player_id, fee
     );
 
-    let projection = state
+    let mut projection = state
         .get_game(|game| {
             ofm_core::transfers::project_transfer_bid_financial_impact(game, player_id, fee)
         })
         .ok_or_else(|| "be.error.noActiveGameSession".to_string())??;
+
+    let cash = i64::try_from(upfront_fee.unwrap_or(fee)).unwrap_or(i64::MAX);
+    projection.finance_after = projection.finance_before.saturating_sub(cash);
+    projection.exceeds_finance = projection.finance_after < 0;
 
     Ok(TransferBidFinancialProjectionCommandResponse { projection })
 }
@@ -348,9 +518,9 @@ pub fn counter_loan_offer_internal(
 ) -> Result<LoanOfferCommandResponse, String> {
     crate::application::live_session::player_role_operation(state, player_id, || {
         info!(
-        "[cmd] counter_loan_offer: player_id={}, offer_id={}, end_date={}, wage_contribution_pct={}, buy_option_fee={:?}",
-        player_id, offer_id, end_date, wage_contribution_pct, buy_option_fee
-    );
+            "[cmd] counter_loan_offer: player_id={}, offer_id={}, end_date={}, wage_contribution_pct={}, buy_option_fee={:?}",
+            player_id, offer_id, end_date, wage_contribution_pct, buy_option_fee
+        );
         let mut outcome = None;
         let game = mutate_active_game_for(state, career, |game| {
             outcome = Some(ofm_core::transfers::counter_loan_offer(
@@ -778,7 +948,7 @@ mod tests {
     }
 
     /// Squad depth for both clubs, so one player leaving never takes either
-    /// below the squad floor — these tests are about the command, not the
+    /// below the squad floor â€” these tests are about the command, not the
     /// floor. Inert: no wage and no market value, so no budget moves for it.
     fn give_both_clubs_squad_depth(game: &mut Game) {
         for team_id in ["team-1", "team-2"] {
@@ -1487,16 +1657,25 @@ mod tests {
         state.set_game(make_bid_game());
 
         let response =
-            preview_transfer_bid_financial_impact_internal(&state, "player-2", 1_000_000)
+            preview_transfer_bid_financial_impact_internal(&state, "player-2", 1_000_000, None)
                 .expect("response");
 
         assert_eq!(response.projection.transfer_budget_before, 2_000_000);
         assert_eq!(response.projection.transfer_budget_after, 1_000_000);
         assert_eq!(response.projection.finance_before, 5_000_000);
         assert_eq!(response.projection.finance_after, 4_000_000);
+        let structured = preview_transfer_bid_financial_impact_internal(
+            &state,
+            "player-2",
+            1_000_000,
+            Some(250_000),
+        )
+        .expect("structured response");
+        assert_eq!(structured.projection.finance_after, 4_750_000);
+        assert_eq!(structured.projection.transfer_budget_after, 1_000_000);
         assert!(!response.projection.exceeds_transfer_budget);
         assert!(!response.projection.exceeds_finance);
-        // Window is open in the fixture — the debit fires today, no deferred
+        // Window is open in the fixture â€” the debit fires today, no deferred
         // registration date to surface.
         assert!(response.projection.pending_registration_date.is_none());
         assert_eq!(
@@ -1532,13 +1711,183 @@ mod tests {
         state.set_game(game);
 
         let response =
-            preview_transfer_bid_financial_impact_internal(&state, "player-2", 1_000_000)
+            preview_transfer_bid_financial_impact_internal(&state, "player-2", 1_000_000, None)
                 .expect("response");
 
         assert_eq!(
             response.projection.pending_registration_date.as_deref(),
             Some("2027-01-02"),
         );
+    }
+
+    fn recall_game(parent: &str, recallable: bool) -> Game {
+        let mut game = make_game();
+        let player = &mut game.players[0];
+        player.team_id = Some("team-2".into());
+        player.active_loan = Some(ActiveLoan {
+            parent_team_id: parent.into(),
+            loan_team_id: "team-2".into(),
+            start_date: "2026-08-01".into(),
+            end_date: "2027-01-01".into(),
+            wage_contribution_pct: 75,
+            buy_option_fee: None,
+            loan_start_minutes: 0,
+            loan_start_appearances: 0,
+            development_reported_minutes: 0,
+            development_reported_appearances: 0,
+        });
+        player.loan_recallable = recallable;
+        game
+    }
+
+    #[test]
+    fn structured_bid_charges_upfront_and_schedules_installments() {
+        let state = StateManager::new();
+        state.set_game(make_bid_game());
+        let result = super::make_structured_transfer_bid_internal(
+            &state,
+            Career::Active,
+            "player-2".into(),
+            1_500_000,
+            500_000,
+            2,
+            180,
+        )
+        .unwrap();
+        assert_eq!(result.decision, TransferNegotiationDecision::Accepted);
+        assert_eq!(result.game.teams[0].finance, 4_500_000);
+        assert_eq!(result.game.teams[0].transfer_budget, 500_000);
+        assert_eq!(result.game.transfer_installments.len(), 2);
+        assert!(result
+            .game
+            .transfer_installments
+            .iter()
+            .all(|i| i.amount == 500_000
+                && i.buyer_team_id == "team-1"
+                && i.seller_team_id == "team-2"
+                && !i.settled));
+    }
+
+    #[test]
+    fn structured_bid_closed_window_preserves_state() {
+        let state = StateManager::new();
+        let mut game = make_bid_game();
+        game.season_context.transfer_window.status = TransferWindowStatus::Closed;
+        game.season_context.transfer_window.opens_on = Some("2027-01-02".into());
+        state.set_game(game);
+        let mut before = state
+            .get_game(|g| serde_json::to_value(g).unwrap())
+            .unwrap();
+        before["revision"] = serde_json::json!(before["revision"].as_u64().unwrap() + 1);
+        let error = super::make_structured_transfer_bid_internal(
+            &state,
+            Career::Active,
+            "player-2".into(),
+            1_500_000,
+            500_000,
+            2,
+            180,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error, "be.error.transfers.transferWindowClosed");
+        assert_eq!(
+            state
+                .get_game(|g| serde_json::to_value(g).unwrap())
+                .unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn structured_bid_maps_invalid_installment_terms() {
+        let state = StateManager::new();
+        state.set_game(make_bid_game());
+        for (upfront, count, interval, key) in [
+            (
+                500_000,
+                0,
+                180,
+                "be.error.transfers.installment.trancheCount",
+            ),
+            (
+                500_000,
+                2,
+                7,
+                "be.error.transfers.installment.trancheInterval",
+            ),
+            (
+                1_500_000,
+                2,
+                180,
+                "be.error.transfers.installment.nothingDeferred",
+            ),
+        ] {
+            let error = super::make_structured_transfer_bid_internal(
+                &state,
+                Career::Active,
+                "player-2".into(),
+                1_500_000,
+                upfront,
+                count,
+                interval,
+            )
+            .err()
+            .unwrap();
+            assert_eq!(error, key);
+        }
+    }
+
+    #[test]
+    fn parent_recalls_recallable_loan() {
+        let state = StateManager::new();
+        state.set_game(recall_game("team-1", true));
+        let game = super::recall_loan_internal(&state, Career::Active, "player-1".into()).unwrap();
+        assert_eq!(game.players[0].team_id.as_deref(), Some("team-1"));
+        assert!(game.players[0].active_loan.is_none());
+        assert!(!game.players[0].loan_recallable);
+    }
+
+    #[test]
+    fn recall_refuses_non_parent_and_non_recallable_loans() {
+        for (parent, recallable, key) in [
+            ("team-2", true, "be.error.notLoanParentClub"),
+            ("team-1", false, "be.error.loanNotRecallable"),
+        ] {
+            let state = StateManager::new();
+            let game = recall_game(parent, recallable);
+            state.set_game(game);
+            let mut before = state
+                .get_game(|g| serde_json::to_value(g).unwrap())
+                .unwrap();
+            before["revision"] = serde_json::json!(before["revision"].as_u64().unwrap() + 1);
+            let error = super::recall_loan_internal(&state, Career::Active, "player-1".into())
+                .err()
+                .unwrap();
+            assert_eq!(error, key);
+            assert_eq!(
+                state
+                    .get_game(|g| serde_json::to_value(g).unwrap())
+                    .unwrap(),
+                before
+            );
+        }
+    }
+
+    #[test]
+    fn transfer_terms_only_allow_parent_to_recall_recallable_loan() {
+        for (parent, recallable, expected) in [
+            ("team-1", true, true),
+            ("team-2", true, false),
+            ("team-1", false, false),
+        ] {
+            let state = StateManager::new();
+            state.set_game(recall_game(parent, recallable));
+            let terms = super::get_player_transfer_terms_internal(&state, "player-1".into())
+                .unwrap()
+                .unwrap();
+            assert_eq!(terms.loan_recallable, expected);
+        }
     }
 
     #[test]
@@ -1548,6 +1897,34 @@ mod tests {
         assert_eq!(
             result.unwrap_err(),
             super::INVALID_YOUTH_SCOUTING_REGION_ERROR
+        );
+    }
+
+    #[test]
+    fn transfer_terms_report_clause_bids_and_window() {
+        let state = StateManager::new();
+        let mut game = make_game();
+        game.players[0].release_clause = Some(1_500_000);
+        let mut second = game.players[0].transfer_offers[0].clone();
+        second.fee = 1_200_000;
+        game.players[0].transfer_offers.push(second);
+        game.season_context.transfer_window.status = TransferWindowStatus::Open;
+        state.set_game(game.clone());
+        let terms = super::get_player_transfer_terms_internal(&state, "player-1".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(terms.release_clause, Some(1_500_000));
+        assert!(terms.structured_bid_allowed);
+        assert!(!terms.loan_recallable);
+        assert_eq!(terms.competing_bids[0].fee, 1_200_000);
+        assert_eq!(terms.competing_bids[0].from_team_name, "Buyer FC");
+        game.season_context.transfer_window.status = TransferWindowStatus::Closed;
+        state.set_game(game);
+        assert!(
+            !super::get_player_transfer_terms_internal(&state, "player-1".into())
+                .unwrap()
+                .unwrap()
+                .structured_bid_allowed
         );
     }
 

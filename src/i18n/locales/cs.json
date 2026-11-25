@@ -1188,6 +1188,17 @@
     }
   },
   "finances": {
+      "installments": {
+        "title": "Přestupové splátky",
+        "outstandingOwed": "Zbývá zaplatit",
+        "outstandingReceivable": "Zbývá obdržet",
+        "payable": "K úhradě",
+        "receivable": "K obdržení",
+        "upcoming": "Nadcházející",
+        "settled": "Uhrazena",
+        "dueDate": "Splatnost: {{date}}",
+        "empty": "Nejsou naplánovány žádné přestupové splátky."
+      },
     "overview": "Finanční přehled",
     "wageBill": "Mzdové náklady",
     "weeklyTotal": "Týdenní součet",
@@ -1415,6 +1426,19 @@
     }
   },
   "transfers": {
+      "releaseClause": "Výstupní klauzule",
+      "triggerReleaseClause": "Aktivovat výstupní klauzuli",
+      "paymentStructure": "Způsob platby",
+      "outrightPayment": "Jednorázově",
+      "installmentsPayment": "Splátky",
+      "installmentsWindowClosed": "Nabídky se splátkami lze podávat pouze během přestupového období.",
+      "upfrontFee": "Platba předem",
+      "trancheCount": "Počet splátek (1–6)",
+      "intervalDays": "Interval (dny)",
+      "deferredBalance": "Zbývající částka",
+      "competingBids": "Konkurenční nabídky",
+      "recallLoan": "Stáhnout z hostování",
+      "recallingLoan": "Stahování...",
     "offerHistory": "Historie nabídek",
     "viewOfferHistory": "Zobrazit historii nabídek",
     "offerRecordedOn": "Nabídka ze dne {{date}}.",
@@ -3263,6 +3287,12 @@
         "historyDepthMax": "Generovaná hloubka historie musí být 24 sezón nebo méně."
       },
       "transfers": {
+        "installment": {
+          "trancheCount": "Počet splátek musí být mezi 1 a 6.",
+          "trancheInterval": "Interval splátek musí být mezi 30 a 365 dny.",
+          "nothingDeferred": "Platba předem musí být nižší než celková přestupová částka.",
+          "feeTooLarge": "Přestupová částka překračuje maximální podporovanou hodnotu."
+        },
         "transferWindowClosed": "Přestupové okno je zavřené",
         "cannotBidOnOwnPlayer": "Nemůžete podávat nabídku na vlastního hráče",
         "playerHasNoTeam": "Hráč nemá žádný tým",
